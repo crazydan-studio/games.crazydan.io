@@ -1,6 +1,6 @@
 # games.crazydan.io · 小游戏合集
 
-CrazyDan Studio 的网页小游戏合集仓库。**主模块（根目录）是游戏门户**，提供所有游戏的入口卡片，点击后跳转至对应的**游戏子模块目录**；每个游戏作为 [pnpm workspace](./pnpm-workspace.yaml) 的子包（子模块）独立构建与开发。
+Crazydan Studio 的网页小游戏合集仓库。**主模块（根目录）是游戏门户**，提供所有游戏的入口卡片，点击后跳转至对应的**游戏子模块目录**；每个游戏作为 [pnpm workspace](./pnpm-workspace.yaml) 的子包（子模块）独立构建与开发。
 
 全仓基于 **Vite + pnpm + Vue** 技术栈，构建产物为**纯静态资源**，可整体部署至任意静态服务器。代码遵循 [Apache-2.0](./LICENSE) 协议。
 

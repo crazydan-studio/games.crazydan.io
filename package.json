@@ -2,7 +2,7 @@
   "name": "games.crazydan.io",
   "private": true,
   "version": "0.1.0",
-  "description": "CrazyDan Studio 小游戏合集：主模块（门户）+ 各游戏子模块，基于 Vite + pnpm + Vue，纯静态部署",
+  "description": "Crazydan Studio 小游戏合集：主模块（门户）+ 各游戏子模块，基于 Vite + pnpm + Vue，纯静态部署",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {

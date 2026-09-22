@@ -27,7 +27,7 @@ function play(game) {
   <div class="page">
     <header class="hero">
       <div class="hero-cat" aria-hidden="true">
-        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CrazyDan Games 吉祥猫">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Crazydan Games 吉祥猫">
           <rect x="4" y="4" width="92" height="92" rx="24" fill="#FF9838" />
           <path d="M20 42 28 10 47 31Z" fill="#E8722A" />
           <path d="M80 42 72 10 53 31Z" fill="#E8722A" />
@@ -48,7 +48,7 @@ function play(game) {
           </g>
         </svg>
       </div>
-      <h1>CrazyDan <span class="grad">Games</span></h1>
+      <h1>Crazydan <span class="grad">Games</span></h1>
       <p class="sub">自研网页小游戏合集 · 即点即玩 · 无需安装</p>
     </header>
 
@@ -72,7 +72,7 @@ function play(game) {
 
     <footer class="footer">
       <p>
-        © 2026 CrazyDan Studio · 代码遵循 <a href="./LICENSE">Apache-2.0</a> 协议 ·
+        © 2026 Crazydan Studio · 代码遵循 <a href="./LICENSE">Apache-2.0</a> 协议 ·
         <a href="https://github.com/crazydan-studio/games.crazydan.io" target="_blank" rel="noreferrer">GitHub</a>
       </p>
     </footer>
