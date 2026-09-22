@@ -1,6 +1,10 @@
 <script setup>
 // ============ 摄像头拍摄「天天」的表情 ============
-// - getUserMedia 预览（前摄镜像 / 后摄正常，可切换）
+// - getUserMedia 预览：默认后置摄像头（拍天天更顺手；桌面无后置时浏览器自动回落内置摄像头）
+// - 前摄镜像 / 后摄正常，可随时切换；多摄设备按 deviceId 精确轮换（部分平台对 facingMode 支持不稳）
+// - 切换安全：先完整停流（含 video 元素解绑）并留出硬件释放窗口再重开；
+//   以请求序号防竞态，过期流一律立即关闭 —— 杜绝孤儿流把摄像头占死
+//   （安卓 Chrome 连续开流会报 Starting videoinput failed，且可能须重启浏览器才能恢复）
 // - 中心方形裁剪 + 缩放到 256px PNG
 // - 保存进浏览器 IndexedDB，并自动占用第一个空元素槽位（棋盘实时换脸）
 import { onBeforeUnmount, onMounted, ref } from 'vue'
@@ -13,11 +17,19 @@ const emit = defineEmits(['close'])
 
 const videoEl = ref(null)
 const stream = ref(null)
-const facing = ref('user')
+const facing = ref('environment') // 请求的摄像头朝向：默认后置
+const actualFacing = ref('environment') // 实际打开的朝向（读轨道设置）：驱动镜像 / 标签 / 拍摄翻转
+const currentDeviceId = ref('') // 当前使用的视频设备 id（多摄设备切换时按 id 轮换）
+const pendingDeviceId = ref('') // 下一次打开要精确使用的设备 id（一次性，用后即清）
 const error = ref('')
 const captured = ref(null) // { blob, url }
 const name = ref('')
 const saving = ref(false)
+
+// 请求序号：仅最新一次 start 的结果生效；过期结果立即停轨，防止流泄漏占死摄像头
+let startSeq = 0
+// 最近一次停流时间：重开前保证足够的硬件释放窗口
+let lastStopAt = 0
 
 function defaultName() {
   const d = new Date()
@@ -25,11 +37,27 @@ function defaultName() {
   return `天天 ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+// 停流：先解绑 video 元素再停轨道，帮助浏览器完整释放摄像头管线
 function stopStream() {
+  if (videoEl.value) {
+    try {
+      videoEl.value.pause()
+    } catch {
+      /* 忽略：未开始播放等 */
+    }
+    videoEl.value.srcObject = null
+  }
   if (stream.value) {
     stream.value.getTracks().forEach((t) => t.stop())
     stream.value = null
+    lastStopAt = Date.now()
   }
+}
+
+// 作废在途请求并停流（关闭弹窗 / 页面隐藏时调用，防止孤儿流占住摄像头）
+function cancelStart() {
+  startSeq++
+  stopStream()
 }
 
 function friendlyError(err) {
@@ -42,33 +70,81 @@ function friendlyError(err) {
   if (err?.name === 'NotFoundError' || err?.name === 'OverconstrainedError') {
     return '未检测到可用摄像头（或当前设备不支持该摄像头方向）'
   }
+  if (err?.name === 'NotReadableError' || err?.name === 'AbortError') {
+    return '摄像头被其他应用/标签页占用，或启动失败：请关闭占用方后重试'
+  }
   return '摄像头启动失败：' + (err?.message || '未知错误')
 }
 
+// 打开摄像头：优先 deviceId 精确指定（多摄设备切换最可靠），失败或无目标设备时
+// 回落 facingMode（ideal 语义：请求后置；无后置的桌面会自动使用内置摄像头）
+async function openCamera() {
+  const video = { width: { ideal: 1280 }, height: { ideal: 720 } }
+  if (pendingDeviceId.value) {
+    const id = pendingDeviceId.value
+    pendingDeviceId.value = ''
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { ...video, deviceId: { exact: id } },
+        audio: false
+      })
+    } catch {
+      /* 设备 id 已失效等 → 回落 facingMode */
+    }
+  }
+  return navigator.mediaDevices.getUserMedia({
+    video: { ...video, facingMode: { ideal: facing.value } },
+    audio: false
+  })
+}
+
 async function start() {
+  const seq = ++startSeq
   error.value = ''
   stopStream()
+  // 安卓 Chrome 停轨后摄像头是异步释放的：距上次停流不足 300ms 就重开，
+  // 会报「Starting videoinput failed」甚至卡死摄像头服务（须重启浏览器才能恢复）
+  const wait = lastStopAt ? 300 - (Date.now() - lastStopAt) : 0
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+  if (seq !== startSeq) return // 等待期间已有更新的请求
   try {
-    stream.value = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: facing.value,
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    })
+    const s = await openCamera()
+    if (seq !== startSeq) {
+      // 结果已过期（等待期间又发起了新请求）：立即关闭，防止占死摄像头
+      s.getTracks().forEach((t) => t.stop())
+      return
+    }
+    stream.value = s
+    const settings = s.getVideoTracks()[0]?.getSettings?.() || {}
+    currentDeviceId.value = settings.deviceId || ''
+    const fm = settings.facingMode
+    actualFacing.value = fm === 'user' || fm === 'environment' ? fm : facing.value
+    facing.value = actualFacing.value // 请求态与实际态对齐，下一次切换从真实状态出发
     if (videoEl.value) {
-      videoEl.value.srcObject = stream.value
+      videoEl.value.srcObject = s
       videoEl.value.play().catch(() => {})
     }
   } catch (err) {
-    error.value = friendlyError(err)
+    if (seq === startSeq) error.value = friendlyError(err)
   }
 }
 
-function switchCamera() {
+async function switchCamera() {
   facing.value = facing.value === 'user' ? 'environment' : 'user'
-  if (!captured.value) start()
+  if (captured.value) return // 拍摄结果页仅记录切换意图，重拍时生效
+  // 多摄设备：轮换到下一枚视频设备（deviceId 精确，比 facingMode 在部分平台更可靠）
+  try {
+    const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
+      (d) => d.kind === 'videoinput'
+    )
+    if (devices.length > 1 && currentDeviceId.value) {
+      const idx = devices.findIndex((d) => d.deviceId === currentDeviceId.value)
+      if (idx >= 0) pendingDeviceId.value = devices[(idx + 1) % devices.length].deviceId
+    }
+  } catch {
+    /* 枚举失败 → 走 facingMode 切换 */
+  }
+  start()
 }
 
 function capture() {
@@ -82,7 +158,7 @@ function capture() {
   const sx = (v.videoWidth - side) / 2
   const sy = (v.videoHeight - side) / 2
   const ctx = canvas.getContext('2d')
-  if (facing.value === 'user') {
+  if (actualFacing.value === 'user') {
     ctx.translate(S, 0)
     ctx.scale(-1, 1)
   }
@@ -129,7 +205,7 @@ function retake() {
 }
 
 function onVisibility() {
-  if (document.hidden && !captured.value) stopStream()
+  if (document.hidden && !captured.value) cancelStart()
   else if (!document.hidden && !captured.value && !stream.value) start()
 }
 
@@ -139,7 +215,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  stopStream()
+  // 作废在途请求：弹窗关闭后不允许任何摄像头流存活或新开（否则摄像头被占死）
+  cancelStart()
   document.removeEventListener('visibilitychange', onVisibility)
   if (captured.value) URL.revokeObjectURL(captured.value.url)
 })
@@ -163,7 +240,7 @@ onBeforeUnmount(() => {
           v-show="!captured && !error"
           ref="videoEl"
           class="cam-video"
-          :class="{ mirror: facing === 'user' }"
+          :class="{ mirror: actualFacing === 'user' }"
           autoplay
           playsinline
           muted
@@ -199,7 +276,7 @@ onBeforeUnmount(() => {
     <div v-else class="cam-actions">
       <button class="cam-side" aria-label="切换摄像头" @click="switchCamera">
         <Icon name="flip" />
-        <span>{{ facing === 'user' ? '前置' : '后置' }}</span>
+        <span>{{ actualFacing === 'user' ? '前置' : '后置' }}</span>
       </button>
       <button class="shutter" aria-label="拍摄" :disabled="!!error" @click="capture"></button>
       <div class="cam-side placeholder-side"></div>
