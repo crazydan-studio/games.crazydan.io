@@ -1,0 +1,40 @@
+{
+  "app": "tiantian-match",
+  "name": "天天表情包（示例）",
+  "version": 1,
+  "exportedAt": "2026-09-22T05:43:28.722Z",
+  "items": [
+    {
+      "file": "images/face-01.svg",
+      "name": "天天·开心"
+    },
+    {
+      "file": "images/face-02.svg",
+      "name": "天天·惊讶"
+    },
+    {
+      "file": "images/face-03.svg",
+      "name": "天天·犯困"
+    },
+    {
+      "file": "images/face-04.svg",
+      "name": "天天·调皮"
+    },
+    {
+      "file": "images/face-05.svg",
+      "name": "天天·生气"
+    },
+    {
+      "file": "images/face-06.svg",
+      "name": "天天·撒娇"
+    }
+  ],
+  "slots": [
+    "images/face-01.svg",
+    "images/face-02.svg",
+    "images/face-03.svg",
+    "images/face-04.svg",
+    "images/face-05.svg",
+    "images/face-06.svg"
+  ]
+}
