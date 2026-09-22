@@ -18,7 +18,7 @@ Crazydan Studio 的网页小游戏合集仓库。**主模块（门户）位于�
 ├── public/
 │   ├── favicon.svg             # 门户静态资源
 │   └── tiantian-xiaoxiaole/    # 游戏静态资源（PWA 清单/图标/SW/示例表情包）
-├── scripts/                    # 测试与资源生成脚本（引擎单测、示例表情包、图标画布）
+├── scripts/                    # 测试与资源生成脚本（引擎单测、示例表情包）
 ├── vite.config.js              # 统一 Vite 配置（MPA 多入口，一次构建产出全站）
 └── package.json                # 唯一的包定义（门户 + 所有游戏共享依赖）
 ```

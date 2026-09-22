@@ -177,9 +177,7 @@ expressions/
 │   └── expressions/          # 示例表情包（静态资源部署契约）
 ├── scripts/                  # 以下脚本位于仓库根 scripts/ 目录
 │   ├── gen-sample-pack.mjs   # 生成示例表情包
-│   ├── gen-icons.mjs         # 生成 PWA 图标画布（配合 agent-browser 截图）
-│   ├── test-engine.mjs       # 引擎单元测试（19 项断言）
-│   └── make-test-pack.mjs    # 生成测试用 zip（冒烟测试）
+│   └── test-engine.mjs       # 引擎单元测试（19 项断言）
 └── src/games/tiantian-xiaoxiaole/
     ├── main.js / App.vue     # 应用壳：屏幕路由 + SW 注册 + 缓存补热
     ├── README.md             # 本说明

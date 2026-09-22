@@ -10,8 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node scripts/test-engine.mjs",
-    "gen:pack": "node scripts/gen-sample-pack.mjs",
-    "gen:icons": "node scripts/gen-icons.mjs"
+    "gen:pack": "node scripts/gen-sample-pack.mjs"
   },
   "dependencies": {
     "jszip": "^3.10.1",
