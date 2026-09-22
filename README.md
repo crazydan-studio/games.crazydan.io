@@ -9,12 +9,10 @@ Crazydan Studio 的网页小游戏合集仓库。**主模块（门户）位于�
 ```
 .
 ├── index.html                  # 主模块（门户）入口页 → src/portal/
-├── tiantian-xiaoxiaole/
-│   └── index.html              # 游戏入口页 → src/games/tiantian-xiaoxiaole/（线上即 /tiantian-xiaoxiaole/）
 ├── src/
 │   ├── portal/                 # 主模块：门户页面（入口卡片列表 + 游戏注册表）
 │   └── games/
-│       └── tiantian-xiaoxiaole/    # 游戏：天天消消乐（源码 + [模块说明](./src/games/tiantian-xiaoxiaole/README.md)）
+│       └── tiantian-xiaoxiaole/    # 游戏：天天消消乐（入口页 index.html + 源码 + [模块说明](./src/games/tiantian-xiaoxiaole/README.md)）
 ├── public/
 │   ├── favicon.svg             # 门户静态资源
 │   └── tiantian-xiaoxiaole/    # 游戏静态资源（PWA 清单/图标/SW/示例表情包）
@@ -23,7 +21,7 @@ Crazydan Studio 的网页小游戏合集仓库。**主模块（门户）位于�
 └── package.json                # 唯一的包定义（门户 + 所有游戏共享依赖）
 ```
 
-> 游戏不再作为独立的 pnpm workspace 子包管理：新增游戏只需新增 `src/games/<name>/` 源码目录、`<name>/index.html` 入口页并在 `vite.config.js` 的 `build.rollupOptions.input` 中登记即可，门户与既有游戏共享依赖与构建管线，公共模块（如 Vue 运行时）自动拆分为共享 chunk。
+> 游戏不再作为独立的 pnpm workspace 子包管理：每个游戏是一个自成一体的 `src/games/<name>/` 模块（入口页随源码同目录），静态资源放在 `public/<name>/`，在 `vite.config.js` 的 `GAME_ENTRIES` 中登记即可参与统一构建，门户与既有游戏共享依赖与构建管线，公共模块（如 Vue 运行时）自动拆分为共享 chunk。
 
 ## 收录游戏
 
@@ -88,11 +86,12 @@ server {
 
 ## 新增游戏
 
-1. 新建源码目录 `src/games/my-game/`（入口 `main.js`、组件、逻辑等，可参考 `src/games/tiantian-xiaoxiaole/` 与其模块 README）；
-2. 新建入口页 `my-game/index.html`，`<script type="module" src="/src/games/my-game/main.js">`，页面内静态资源用相对路径引用；
-3. 在 `vite.config.js` 的 `build.rollupOptions.input` 中登记：`'my-game': r('./my-game/index.html')`；
-4. 游戏专属静态资源（favicon / PWA 清单与图标 / Service Worker 等）放入 `public/my-game/`，构建后即位于 `dist/my-game/`；
-5. 在门户 `src/portal/App.vue` 的游戏注册表中添加入口卡片（`path: './my-game/'`）。
+1. 新建游戏模块目录 `src/games/my-game/`：入口页 `index.html`（`<script type="module" src="/src/games/my-game/main.js">`，页面内静态资源用相对路径引用）+ 入口 `main.js`、组件、逻辑等，可参考 `src/games/tiantian-xiaoxiaole/` 与其模块 README；
+2. 游戏专属静态资源（favicon / PWA 清单与图标 / Service Worker 等）放入 `public/my-game/`，构建后与入口页同位于 `dist/my-game/`；
+3. 在 `vite.config.js` 的 `GAME_ENTRIES` 中登记游戏名 `'my-game'`；
+4. 在门户 `src/portal/App.vue` 的游戏注册表中添加入口卡片（`path: './my-game/'`）。
+
+> 入口页的线上路由 `/my-game/` 与磁盘位置解耦，由 `vite.config.js` 内的 `gamePages()` 插件负责映射（开发态与构建态行为一致），无需在仓库根创建同名目录。
 
 ## 测试
 

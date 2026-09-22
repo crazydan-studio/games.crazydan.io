@@ -164,11 +164,9 @@ expressions/
 
 ## 目录结构
 
-游戏源码位于 `src/games/tiantian-xiaoxiaole/`，入口页、静态资源与脚本位于仓库根对应位置：
+游戏模块自成一体：入口页与源码同位于 `src/games/tiantian-xiaoxiaole/`，静态资源与脚本位于仓库根对应位置：
 
 ```
-├── tiantian-xiaoxiaole/
-│   └── index.html            # 入口页（仓库根；manifest + apple-touch-icon meta）
 ├── public/tiantian-xiaoxiaole/
 │   ├── favicon.svg
 │   ├── manifest.webmanifest  # PWA 清单
@@ -179,6 +177,7 @@ expressions/
 │   ├── gen-sample-pack.mjs   # 生成示例表情包
 │   └── test-engine.mjs       # 引擎单元测试（19 项断言）
 └── src/games/tiantian-xiaoxiaole/
+    ├── index.html            # 入口页（manifest + apple-touch-icon meta；线上 /tiantian-xiaoxiaole/，由 gamePages 插件映射）
     ├── main.js / App.vue     # 应用壳：屏幕路由 + SW 注册 + 缓存补热
     ├── README.md             # 本说明
     ├── style.css             # 设计系统（暖色猫咪主题）
