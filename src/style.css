@@ -1,0 +1,412 @@
+/* ============ 门户主模块（CrazyDan Games）全局样式 ============ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #fff4e3;
+  --bg-dot: #f3ddbd;
+  --ink: #4a3728;
+  --ink-soft: #6b5a48;
+  --ink-muted: #a08b74;
+  --card: #ffffff;
+  --accent: #ff9838;
+  --accent-deep: #e8722a;
+  --accent-soft: #fff0dc;
+  --radius: 24px;
+  --shadow: 0 6px 24px rgba(120, 82, 40, 0.12);
+  --shadow-lift: 0 16px 40px rgba(120, 82, 40, 0.2);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family:
+    'PingFang SC',
+    'HarmonyOS Sans SC',
+    'Microsoft YaHei',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: var(--ink);
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--bg-dot) 2.2px, transparent 2.2px);
+  background-size: 28px 28px;
+  line-height: 1.6;
+}
+
+a {
+  color: var(--accent-deep);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 48px) clamp(16px, 4vw, 32px) 24px;
+}
+
+/* ---------- 顶部 Hero ---------- */
+.hero {
+  text-align: center;
+  padding: clamp(8px, 2vw, 24px) 0 clamp(24px, 4vw, 44px);
+}
+
+.hero-cat {
+  width: clamp(72px, 12vw, 96px);
+  margin: 0 auto 14px;
+  filter: drop-shadow(0 8px 16px rgba(232, 114, 42, 0.35));
+  animation: hero-bob 3.2s ease-in-out infinite;
+}
+
+.hero-cat svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.hero h1 {
+  font-size: clamp(30px, 6vw, 44px);
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.hero h1 .grad {
+  background: linear-gradient(120deg, #ff9838, #e8722a 60%, #d5531d);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero .sub {
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: clamp(14px, 2.4vw, 17px);
+  letter-spacing: 2px;
+}
+
+/* ---------- 游戏卡片网格 ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.game-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* 卡片头图：渐变 + 猫 + 漂浮元素砖 */
+.preview {
+  position: relative;
+  height: 200px;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.55), transparent 42%),
+    linear-gradient(150deg, #ffc06a 0%, #ff9838 55%, #f07f2b 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.28) 2px, transparent 2px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
+
+.preview-cat {
+  width: 128px;
+  filter: drop-shadow(0 10px 18px rgba(150, 70, 10, 0.35));
+  animation: hero-bob 3.6s ease-in-out infinite;
+}
+
+.preview-cat svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.mini-tile {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  box-shadow: 0 6px 14px rgba(150, 70, 10, 0.3);
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  animation: tile-float 4s ease-in-out infinite;
+}
+
+.mini-tile svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mini-tile.t1 {
+  left: 12%;
+  top: 22%;
+  background: #ff7eb0;
+  animation-delay: 0s;
+}
+
+.mini-tile.t2 {
+  right: 13%;
+  top: 18%;
+  background: #ffd34e;
+  animation-delay: 1.2s;
+}
+
+.mini-tile.t3 {
+  right: 18%;
+  bottom: 16%;
+  background: #7ec9ff;
+  animation-delay: 2.1s;
+}
+
+/* 卡片正文 */
+.body {
+  padding: 20px 22px 6px;
+  flex: 1;
+}
+
+.title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.body h3 {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.tagline {
+  font-size: 13px;
+  color: var(--ink-muted);
+  letter-spacing: 1px;
+}
+
+.desc {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--ink-soft);
+  line-height: 1.75;
+}
+
+.tags {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  font-size: 12px;
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border: 1px solid #ffd9ae;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* 卡片底部操作条 */
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 22px 20px;
+  margin-top: 8px;
+  border-top: 1px dashed #f0e2cc;
+}
+
+.path {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ffb15c, #f08a24);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  box-shadow: 0 6px 14px rgba(232, 114, 42, 0.4);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.play-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.05);
+  box-shadow: 0 10px 20px rgba(232, 114, 42, 0.45);
+}
+
+.play-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.play-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 敬请期待占位卡 */
+.coming {
+  border: 2px dashed #ecd9bd;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: none;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 28px;
+}
+
+.coming:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.coming-face {
+  width: 84px;
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+
+.coming-face svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.coming h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.coming p {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* ---------- 页脚 ---------- */
+.footer {
+  margin-top: auto;
+  padding-top: clamp(32px, 6vw, 56px);
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* ---------- 动画 ---------- */
+@keyframes hero-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1.5deg);
+  }
+}
+
+@keyframes tile-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(8deg);
+  }
+}
+
+/* ---------- 移动端适配 ---------- */
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview {
+    height: 176px;
+  }
+
+  .preview-cat {
+    width: 108px;
+  }
+
+  .mini-tile {
+    width: 44px;
+    height: 44px;
+  }
+
+  .foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .path {
+    text-align: center;
+  }
+
+  .play-btn {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-cat,
+  .preview-cat,
+  .mini-tile {
+    animation: none;
+  }
+
+  .game-card:hover {
+    transform: none;
+  }
+}
