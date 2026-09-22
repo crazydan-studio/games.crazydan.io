@@ -9,7 +9,7 @@ import {
   findPossibleMove,
   reshuffleTypes,
   swapCells
-} from '../src/game/engine.js'
+} from '../src/games/tiantian-xiaoxiaole/game/engine.js'
 
 let passed = 0
 function ok(cond, msg) {

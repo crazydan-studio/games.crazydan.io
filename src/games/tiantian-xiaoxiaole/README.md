@@ -2,8 +2,8 @@
 
 用猫咪「天天」的表情玩三消！拍下天天的各种表情，它们会**实时变成棋盘上的消除元素**。
 
-本目录是 [games.crazydan.io](../../) 仓库的一个**游戏子模块**（pnpm workspace 子包），
-线上位于门户子目录 `/games/tiantian-xiaoxiaole/`。技术栈：**Vite + pnpm + Vue 3**，纯静态部署。
+本目录是 [games.crazydan.io](../../../) 仓库的一个**游戏模块**（`src/games/tiantian-xiaoxiaole/`），
+与门户主模块同属一个 Vite 工程统一开发与构建，线上位于门户子目录 `/tiantian-xiaoxiaole/`。技术栈：**Vite + pnpm + Vue 3**，纯静态部署。
 
 ## 功能一览
 
@@ -35,11 +35,12 @@
 ## 快速开始
 
 ```bash
-# 在仓库根目录安装依赖（会同时装好主模块与本子模块）
+# 在仓库根目录安装依赖（门户与所有游戏共享一份 node_modules）
 pnpm install
 
-# 本地开发（http://localhost:5174，摄像头在 localhost 下可用）
-pnpm dev                      # 在本目录执行；或在仓库根执行 pnpm dev:game:tiantian
+# 本地开发（统一 dev server，摄像头在 localhost 下可用）
+#   门户 http://localhost:5173/ ，本游戏 http://localhost:5173/tiantian-xiaoxiaole/
+pnpm dev                      # 在仓库根执行
 
 # 引擎单元测试（纯逻辑，19 项断言）
 pnpm test
@@ -47,7 +48,7 @@ pnpm test
 # 重新生成示例表情包静态资源（可选，仓库已含产物）
 pnpm gen:pack
 
-# 生产构建 → 输出至仓库根 dist/games/tiantian-xiaoxiaole/
+# 生产构建 → 统一输出至仓库根 dist/（本游戏位于 dist/tiantian-xiaoxiaole/）
 pnpm build
 
 # 本地预览构建产物
@@ -56,7 +57,7 @@ pnpm preview
 
 ## 静态部署
 
-`pnpm build`（在仓库根统一执行亦可）产出的 `dist/games/tiantian-xiaoxiaole/` 是**纯静态站点**，
+`pnpm build`（在仓库根执行）产出的 `dist/tiantian-xiaoxiaole/` 是**纯静态站点**，
 全部资源使用 `base: './'` 相对引用，可部署到任意目录/子路径，不需要 Node 运行时。
 `sw.js` / `manifest.webmanifest` / `icons/` 随构建一并产出，部署后即是完整的 PWA。
 
@@ -71,7 +72,7 @@ server {
     ssl_certificate     /etc/nginx/cert.pem;
     ssl_certificate_key /etc/nginx/cert.key;
 
-    root /var/www/games.crazydan.io/dist/games/tiantian-xiaoxiaole;
+    root /var/www/games.crazydan.io/dist/tiantian-xiaoxiaole;
     index index.html;
 
     # SPA 兜底
@@ -135,15 +136,15 @@ expressions/
 - `items`：表情清单（图片支持 png/jpg/webp/svg/gif）
 - `slots`：可选，长度 6，对应 6 个游戏元素槽位，值为其表情的 `file` 或 `null`（默认猫咪）
 
-本目录 `public/expressions/` 内置一套 6 款手绘天天表情的示例包，
-构建后会出现在 `dist/games/tiantian-xiaoxiaole/expressions/`，可用于验证「从服务器导入」链路。
+本游戏内置的示例包位于仓库根 `public/tiantian-xiaoxiaole/expressions/`（6 款手绘天天表情），
+构建后会出现在 `dist/tiantian-xiaoxiaole/expressions/`，可用于验证「从服务器导入」链路。
 
 ## PWA 离线可玩
 
-- `public/sw.js`：Service Worker。导航请求**网络优先**（保证发版后拿到最新页面），
+- `public/tiantian-xiaoxiaole/sw.js`（仓库根 public 下按游戏分目录）：Service Worker。导航请求**网络优先**（保证发版后拿到最新页面），
   静态资源**缓存优先**；首次访问时页面资源早于 SW 接管加载，注册完成后会
   自动「补热」缓存（重放本次加载的资源），实现**打开一次即可完全离线**。
-- `public/manifest.webmanifest` + `public/icons/`：安装清单与图标（192/512/maskable），
+- `public/tiantian-xiaoxiaole/manifest.webmanifest` + `public/tiantian-xiaoxiaole/icons/`：安装清单与图标（192/512/maskable），
   支持「添加到主屏幕 / 安装应用」，主页提供安装按钮与离线状态徽章。
 - 开发模式下 `/src/`、`/@vite` 等路径永远走网络，不影响 HMR 热更新。
 - 表情图片存 IndexedDB（blob 本地化），离线时棋盘照常换脸。
@@ -163,22 +164,25 @@ expressions/
 
 ## 目录结构
 
+游戏源码位于 `src/games/tiantian-xiaoxiaole/`，入口页、静态资源与脚本位于仓库根对应位置：
+
 ```
-├── index.html                # 入口（manifest + apple-touch-icon meta）
-├── vite.config.js            # base:'./' + outDir 并入仓库根 dist/games/tiantian-xiaoxiaole/
-├── public/
+├── tiantian-xiaoxiaole/
+│   └── index.html            # 入口页（仓库根；manifest + apple-touch-icon meta）
+├── public/tiantian-xiaoxiaole/
 │   ├── favicon.svg
 │   ├── manifest.webmanifest  # PWA 清单
 │   ├── sw.js                 # Service Worker（离线缓存策略）
 │   ├── icons/                # PWA 图标（192/512/maskable PNG）
 │   └── expressions/          # 示例表情包（静态资源部署契约）
-├── scripts/
+├── scripts/                  # 以下脚本位于仓库根 scripts/ 目录
 │   ├── gen-sample-pack.mjs   # 生成示例表情包
 │   ├── gen-icons.mjs         # 生成 PWA 图标画布（配合 agent-browser 截图）
 │   ├── test-engine.mjs       # 引擎单元测试（19 项断言）
 │   └── make-test-pack.mjs    # 生成测试用 zip（冒烟测试）
-└── src/
+└── src/games/tiantian-xiaoxiaole/
     ├── main.js / App.vue     # 应用壳：屏幕路由 + SW 注册 + 缓存补热
+    ├── README.md             # 本说明
     ├── style.css             # 设计系统（暖色猫咪主题）
     ├── game/
     │   ├── engine.js         # 消消乐纯逻辑引擎（匹配簇/特殊块/连锁/死局）
@@ -209,4 +213,4 @@ Chrome / Edge / Safari / Firefox 现代版本（需支持 IndexedDB、pointer ev
 
 ## 协议
 
-代码遵循仓库根目录的 [Apache-2.0](../../LICENSE) 协议。
+代码遵循仓库根目录的 [Apache-2.0](../../../LICENSE) 协议。

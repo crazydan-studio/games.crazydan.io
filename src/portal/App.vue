@@ -2,9 +2,9 @@
 import GameCard from './components/GameCard.vue'
 
 // ============ 游戏注册表 ============
-// 新增游戏子模块时在此追加入口即可（README「新增游戏子模块」有完整步骤）：
-// - path      生产构建后的同域子目录（相对路径，任意子路径静态部署均可用）
-// - devOrigin 开发态该游戏独立 dev server 的地址（见其 vite.config 端口）
+// 新增游戏时在此追加入口即可（README「新增游戏」有完整步骤）：
+// - path 生产构建后的同域子目录（相对路径，任意子路径静态部署均可用），
+//   开发态与生产构建后行为一致 —— 同一 dev server 下即 ./<name>/
 const games = [
   {
     id: 'tiantian-xiaoxiaole',
@@ -12,14 +12,14 @@ const games = [
     tagline: '天天的表情 · 三连消',
     desc: '以宠物猫「天天」的表情为主题的三消游戏：拍下它的各种表情，实时变成棋盘上的消除元素。4 连生成炸弹猫、5 连召唤彩虹猫，支持 PWA 离线畅玩。',
     tags: ['三消', '休闲', '摄像头表情', 'PWA 离线'],
-    path: './games/tiantian-xiaoxiaole/',
-    devOrigin: 'http://localhost:5174/'
+    path: './tiantian-xiaoxiaole/'
   }
 ]
 
 function play(game) {
-  // 开发态跳转到该游戏的独立 dev server；生产构建后跳转同域游戏子目录
-  location.href = import.meta.env.DEV ? game.devOrigin : game.path
+  // 统一工程：门户与各游戏同源（同一 dev server / 同一次构建产物），
+  // 点击卡片直接跳转同域游戏子目录
+  location.href = game.path
 }
 </script>
 
@@ -66,7 +66,7 @@ function play(game) {
           </svg>
         </div>
         <h3>更多游戏，敬请期待</h3>
-        <p>新的游戏子模块将持续加入这个合集。</p>
+        <p>新的游戏将以 src/games/ 下的新子目录形式持续加入这个合集。</p>
       </div>
     </main>
 

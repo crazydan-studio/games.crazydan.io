@@ -1,20 +1,20 @@
 {
   "name": "games.crazydan.io",
   "private": true,
-  "version": "0.1.0",
-  "description": "Crazydan Studio 小游戏合集：主模块（门户）+ 各游戏子模块，基于 Vite + pnpm + Vue，纯静态部署",
+  "version": "0.2.0",
+  "description": "Crazydan Studio 小游戏合集：门户与各游戏以 src 子目录统一开发与构建，基于 Vite + pnpm + Vue，纯静态部署",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/build-all.mjs",
-    "build:portal": "vite build",
-    "build:games": "node scripts/build-all.mjs --games-only",
+    "build": "vite build",
     "preview": "vite preview",
-    "dev:game:tiantian": "pnpm --filter tiantian-xiaoxiaole dev",
-    "test": "pnpm -r run test"
+    "test": "node scripts/test-engine.mjs",
+    "gen:pack": "node scripts/gen-sample-pack.mjs",
+    "gen:icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
+    "jszip": "^3.10.1",
     "vue": "^3.5.13"
   },
   "devDependencies": {

@@ -1,15 +1,20 @@
-// ============ 生成示例表情包静态资源（public/expressions/） ============
-// 与 CatFace.vue 共用 src/utils/catface.js —— 单一数据源。
+// ============ 生成示例表情包静态资源（public/tiantian-xiaoxiaole/expressions/） ============
+// 与游戏模块的 CatFace.vue 共用 catface.js —— 单一数据源。
 // 运行：node scripts/gen-sample-pack.mjs（或 pnpm gen:pack）
 import { writeFileSync, mkdirSync } from 'node:fs'
-import { catFaceSvg, FACE_NAMES } from '../src/utils/catface.js'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { catFaceSvg, FACE_NAMES } from '../src/games/tiantian-xiaoxiaole/utils/catface.js'
 
-mkdirSync('public/expressions/images', { recursive: true })
+// 路径相对本脚本定位，任意工作目录下运行均有效
+const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'tiantian-xiaoxiaole', 'expressions')
+
+mkdirSync(join(OUT_DIR, 'images'), { recursive: true })
 
 const items = []
 FACE_NAMES.forEach((name, i) => {
   const file = `images/face-${String(i + 1).padStart(2, '0')}.svg`
-  writeFileSync(`public/expressions/${file}`, catFaceSvg(i))
+  writeFileSync(join(OUT_DIR, file), catFaceSvg(i))
   items.push({ file, name: `天天·${name}` })
 })
 
@@ -22,9 +27,9 @@ const manifest = {
   slots: items.map((it) => it.file)
 }
 
-writeFileSync('public/expressions/manifest.json', JSON.stringify(manifest, null, 2))
+writeFileSync(join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2))
 writeFileSync(
-  'public/expressions/README.txt',
+  join(OUT_DIR, 'README.txt'),
   `这是「天天消消乐」的示例表情包目录（6 款手绘天天表情）。
 
 部署方式：

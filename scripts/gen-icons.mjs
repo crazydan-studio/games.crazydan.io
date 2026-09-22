@@ -1,14 +1,14 @@
 // ============ 生成 PWA 图标的 HTML 画布 ============
-// 复用 src/utils/catface.js 的「开心天天」表情作为图标主体
+// 复用游戏模块 src/games/tiantian-xiaoxiaole/utils/catface.js 的「开心天天」表情作为图标主体
 // 之后由 agent-browser 以精确视口截图导出 PNG
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { catFaceSvg } from '../src/utils/catface.js'
+import { catFaceSvg } from '../src/games/tiantian-xiaoxiaole/utils/catface.js'
 
 // 路径相对本脚本定位，任意工作目录下运行均有效
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
-const OUT_DIR = join(SCRIPT_DIR, '..', 'public', 'icons')
+const OUT_DIR = join(SCRIPT_DIR, '..', 'public', 'tiantian-xiaoxiaole', 'icons')
 
 const SPARK = 'M12 2 L14 9.5 21.5 12 14 14.5 12 22 10 14.5 2.5 12 10 9.5 Z'
 
