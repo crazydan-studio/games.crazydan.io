@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 本地环境与日志
+*.local
+.env
+.env.*
+*.log
+pnpm-debug.log*
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
