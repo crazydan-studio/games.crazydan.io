@@ -4,6 +4,7 @@ import assert from 'node:assert'
 import {
   BOARD_SIZE,
   makeTile,
+  createBoard,
   findMatchGroups,
   expandSpecials,
   findPossibleMove,
@@ -26,6 +27,22 @@ function buildGrid(types) {
   const grid = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null))
   for (let r = 0; r < BOARD_SIZE; r++) {
     for (let c = 0; c < BOARD_SIZE; c++) {
+      const t = types[r] && types[r][c]
+      if (t != null) {
+        const tile = makeTile(Array.isArray(t) ? t[0] : t)
+        if (Array.isArray(t)) tile.kind = t[1]
+        grid[r][c] = tile
+      }
+    }
+  }
+  return grid
+}
+
+// 构建指定行列数的棋盘（支持 6×8 等非方阵）
+function buildGrid2(types, rows, cols) {
+  const grid = Array.from({ length: rows }, () => Array(cols).fill(null))
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
       const t = types[r] && types[r][c]
       if (t != null) {
         const tile = makeTile(Array.isArray(t) ? t[0] : t)
@@ -256,6 +273,59 @@ function buildGrid(types) {
   ])
   swapCells(g, 0, 0, 1, 0)
   ok(g[0][0].x === 0 && g[0][0].y === 0 && g[1][0].x === 0 && g[1][0].y === 1, 'swapCells 同步 x/y 渲染坐标')
+}
+
+// ---------- 13. 非方阵棋盘（6 列 × 8 行）：匹配扫描按实际行列 ----------
+{
+  // 行 0：0,0,1,... → 2 连不成组；行 3：1,1,1 → 3 连
+  const g = buildGrid2(
+    [
+      [0, 0, 1, 2, 3, 4],
+      [5, 0, 1, 2, 3, 4],
+      [0, 1, 2, 3, 4, 5],
+      [1, 1, 1, 2, 3, 4],
+      [5, 0, 1, 2, 3, 4],
+      [0, 1, 2, 3, 4, 5],
+      [5, 0, 1, 2, 3, 4],
+      [0, 1, 2, 3, 4, 5]
+    ],
+    8,
+    6
+  )
+  const groups = findMatchGroups(g)
+  const three = groups.find((x) => x.type === 1)
+  ok(three && three.cells.length === 3, '6×8 棋盘：横向 3 连按 6 列扫描成组')
+  // 列方向跨行扫描同样生效：列 2 行 0..2 无匹配（1,1,2? 实际 [1,1,2]）→ 已由上面的组唯一性保证
+  ok(groups.filter((x) => x.type === 1).length === 1, '6×8 棋盘：无跨列误判')
+}
+
+// ---------- 14. 非方阵棋盘：可行步与 createBoard 尺寸 ----------
+{
+  const g = createBoard(8, 6)
+  ok(g.length === 8 && g[0].length === 6, 'createBoard(8,6) 生成 8 行 6 列棋盘')
+  ok(!!findPossibleMove(g), '6×8 随机棋盘存在可行步')
+  // 棋盘格 0/1 相间：垂直交换可形成横向 3 连 → 存在可行步，且坐标必须落在 6×8 边界内
+  const board = buildGrid2(
+    [
+      [0, 1, 0, 1, 0, 1],
+      [1, 0, 1, 0, 1, 0],
+      [0, 1, 0, 1, 0, 1],
+      [1, 0, 1, 0, 1, 0],
+      [0, 1, 0, 1, 0, 1],
+      [1, 0, 1, 0, 1, 0],
+      [0, 1, 0, 1, 0, 1],
+      [1, 0, 1, 0, 1, 0]
+    ],
+    8,
+    6
+  )
+  const mv = findPossibleMove(board)
+  ok(
+    !!mv &&
+      mv.r >= 0 && mv.r < 8 && mv.c >= 0 && mv.c < 6 &&
+      mv.r2 >= 0 && mv.r2 < 8 && mv.c2 >= 0 && mv.c2 < 6,
+    '6×8 棋盘 findPossibleMove 返回边界内的可行步'
+  )
 }
 
 console.log(`\n全部 ${passed} 项引擎测试通过 ✅`)

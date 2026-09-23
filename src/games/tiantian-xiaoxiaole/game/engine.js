@@ -1,5 +1,5 @@
 // ============ 消消乐核心引擎（纯逻辑，无 DOM 依赖） ============
-// 棋盘：8×8，元素类型 0~5（对应 6 个表情槽位）
+// 棋盘：默认 8×8（可配置为 6×8 / 6×6 等，行列数直接从 grid 读取），元素类型 0~5（对应 6 个表情槽位）
 // tile 结构：{ id, type, kind, x, y, removing, shake, born, blasted, rainbowBlast }
 //   - x/y 仅用于渲染定位（列/行），逻辑判断一律以 grid 下标为准
 //   - kind: 'normal' | 'bomb' | 'rainbow'
@@ -11,7 +11,7 @@
 //   · 单线正好 4 连            → 炸弹猫（在玩家落子位 / 线中点诞生）
 //   · 单线 ≥5 连 或 L/T 交叉 ≥5 → 彩虹猫（在交叉点 / 线中点诞生）
 
-export const BOARD_SIZE = 8
+export const BOARD_SIZE = 8 // 默认棋盘尺寸（引擎函数自身从 grid 读取行列数）
 export const ELEMENT_COUNT = 6
 
 let tileSeq = 0
@@ -36,7 +36,11 @@ export function randType() {
   return Math.floor(Math.random() * ELEMENT_COUNT)
 }
 
-const cellKey = (r, c) => r * BOARD_SIZE + c
+// 格子的唯一键（列数参与编码，兼容非方阵棋盘）
+const cellKey = (r, c, cols) => r * cols + c
+
+// 棋盘行列数（约定：所有格子均为同尺寸二维数组）
+const dims = (grid) => ({ rows: grid.length, cols: grid[0].length })
 
 function createsImmediateMatch(grid, r, c, type) {
   if (c >= 2 && grid[r][c - 1] && grid[r][c - 2] && grid[r][c - 1].type === type && grid[r][c - 2].type === type) {
@@ -49,11 +53,11 @@ function createsImmediateMatch(grid, r, c, type) {
 }
 
 // 生成一张无初始匹配、且至少存在一步可行交换的棋盘
-export function createBoard() {
+export function createBoard(rows = BOARD_SIZE, cols = BOARD_SIZE) {
   for (let attempt = 0; attempt < 100; attempt++) {
-    const grid = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null))
-    for (let r = 0; r < BOARD_SIZE; r++) {
-      for (let c = 0; c < BOARD_SIZE; c++) {
+    const grid = Array.from({ length: rows }, () => Array(cols).fill(null))
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
         let type = randType()
         let guard = 0
         while (guard < 40 && createsImmediateMatch(grid, r, c, type)) {
@@ -66,8 +70,8 @@ export function createBoard() {
     if (findPossibleMove(grid)) return grid
   }
   // 兜底：极小概率事件
-  return Array.from({ length: BOARD_SIZE }, (_, r) =>
-    Array.from({ length: BOARD_SIZE }, (_, c) => makeTile((r + c) % ELEMENT_COUNT))
+  return Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => makeTile((r + c) % ELEMENT_COUNT))
   )
 }
 
@@ -77,13 +81,14 @@ export function createBoard() {
 // 彩虹猫（type = -1）不参与任何匹配
 function scanRuns(grid) {
   const runs = []
+  const { rows, cols } = dims(grid)
 
   // 水平方向
-  for (let r = 0; r < BOARD_SIZE; r++) {
+  for (let r = 0; r < rows; r++) {
     let start = 0
-    for (let c = 1; c <= BOARD_SIZE; c++) {
+    for (let c = 1; c <= cols; c++) {
       const prev = grid[r][c - 1]
-      const cur = c < BOARD_SIZE ? grid[r][c] : null
+      const cur = c < cols ? grid[r][c] : null
       const broken = !prev || prev.type < 0 || !cur || cur.type < 0 || cur.type !== prev.type
       if (broken) {
         if (prev && prev.type >= 0 && c - start >= 3) {
@@ -97,11 +102,11 @@ function scanRuns(grid) {
   }
 
   // 垂直方向
-  for (let c = 0; c < BOARD_SIZE; c++) {
+  for (let c = 0; c < cols; c++) {
     let start = 0
-    for (let r = 1; r <= BOARD_SIZE; r++) {
+    for (let r = 1; r <= rows; r++) {
       const prev = grid[r - 1][c]
-      const cur = r < BOARD_SIZE ? grid[r][c] : null
+      const cur = r < rows ? grid[r][c] : null
       const broken = !prev || prev.type < 0 || !cur || cur.type < 0 || cur.type !== prev.type
       if (broken) {
         if (prev && prev.type >= 0 && r - start >= 3) {
@@ -124,6 +129,7 @@ function scanRuns(grid) {
 export function findMatchGroups(grid, preferCells) {
   const runs = scanRuns(grid)
   if (!runs.length) return []
+  const { cols } = dims(grid)
 
   const used = runs.map(() => false)
   const groups = []
@@ -134,7 +140,7 @@ export function findMatchGroups(grid, preferCells) {
     const type = runs[i].type
     const cellMap = new Map()
     const runList = [runs[i]]
-    for (const cell of runs[i].cells) cellMap.set(cellKey(cell.r, cell.c), cell)
+    for (const cell of runs[i].cells) cellMap.set(cellKey(cell.r, cell.c, cols), cell)
 
     // 反复合并共享格子的同类型线段
     let grew = true
@@ -142,10 +148,10 @@ export function findMatchGroups(grid, preferCells) {
       grew = false
       for (let j = 0; j < runs.length; j++) {
         if (used[j] || runs[j].type !== type) continue
-        if (runs[j].cells.some((cell) => cellMap.has(cellKey(cell.r, cell.c)))) {
+        if (runs[j].cells.some((cell) => cellMap.has(cellKey(cell.r, cell.c, cols)))) {
           used[j] = true
           runList.push(runs[j])
-          for (const cell of runs[j].cells) cellMap.set(cellKey(cell.r, cell.c), cell)
+          for (const cell of runs[j].cells) cellMap.set(cellKey(cell.r, cell.c, cols), cell)
           grew = true
         }
       }
@@ -163,7 +169,7 @@ export function findMatchGroups(grid, preferCells) {
     let spawn = null
     if (preferCells && preferCells.length) {
       for (const p of preferCells) {
-        const k = cellKey(p.r, p.c)
+        const k = cellKey(p.r, p.c, cols)
         if (cellMap.has(k)) {
           spawn = cellMap.get(k)
           break
@@ -206,9 +212,10 @@ export function findMatchGroups(grid, preferCells) {
 // silentIds: 只移除、不触发的块 id（已被主动激活的彩虹猫）
 // 返回 { cells, triggers }，trigger: { kind, r, c, type, cleared }
 export function expandSpecials(grid, initialCells, skipIds = new Set(), silentIds = new Set()) {
+  const { rows, cols } = dims(grid)
   const pending = [...initialCells]
   const removal = new Map()
-  for (const cell of initialCells) removal.set(cellKey(cell.r, cell.c), cell)
+  for (const cell of initialCells) removal.set(cellKey(cell.r, cell.c, cols), cell)
   const fired = new Set()
   const triggers = []
 
@@ -224,8 +231,8 @@ export function expandSpecials(grid, initialCells, skipIds = new Set(), silentId
         for (let dc = -1; dc <= 1; dc++) {
           const rr = r + dr
           const cc = c + dc
-          if (rr < 0 || rr >= BOARD_SIZE || cc < 0 || cc >= BOARD_SIZE) continue
-          const k = cellKey(rr, cc)
+          if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue
+          const k = cellKey(rr, cc, cols)
           if (removal.has(k)) continue
           const tt = grid[rr][cc]
           if (!tt || skipIds.has(tt.id)) continue
@@ -239,10 +246,10 @@ export function expandSpecials(grid, initialCells, skipIds = new Set(), silentId
       fired.add(t.id)
       // 被波及的彩虹猫：随机挑一种在场类型全部清除
       const counts = new Map()
-      for (let rr = 0; rr < BOARD_SIZE; rr++) {
-        for (let cc = 0; cc < BOARD_SIZE; cc++) {
+      for (let rr = 0; rr < rows; rr++) {
+        for (let cc = 0; cc < cols; cc++) {
           const tt = grid[rr][cc]
-          if (tt && tt.type >= 0 && !removal.has(cellKey(rr, cc)) && !skipIds.has(tt.id)) {
+          if (tt && tt.type >= 0 && !removal.has(cellKey(rr, cc, cols)) && !skipIds.has(tt.id)) {
             counts.set(tt.type, (counts.get(tt.type) || 0) + 1)
           }
         }
@@ -252,10 +259,10 @@ export function expandSpecials(grid, initialCells, skipIds = new Set(), silentId
       let added = 0
       if (types.length) {
         pick = types[Math.floor(Math.random() * types.length)]
-        for (let rr = 0; rr < BOARD_SIZE; rr++) {
-          for (let cc = 0; cc < BOARD_SIZE; cc++) {
+        for (let rr = 0; rr < rows; rr++) {
+          for (let cc = 0; cc < cols; cc++) {
             const tt = grid[rr][cc]
-            const k = cellKey(rr, cc)
+            const k = cellKey(rr, cc, cols)
             if (tt && tt.type === pick && !removal.has(k) && !skipIds.has(tt.id)) {
               removal.set(k, { r: rr, c: cc })
               pending.push({ r: rr, c: cc })
@@ -292,6 +299,7 @@ export function swapCells(grid, r1, c1, r2, c2) {
 // 是否存在可行的一步交换（返回第一个找到的可行动，可用于提示）
 // 优先级：彩虹猫配任意邻居 → 炸弹对炸弹 → 普通三连
 export function findPossibleMove(grid) {
+  const { rows, cols } = dims(grid)
   const fourDirs = [
     [0, 1],
     [1, 0],
@@ -299,15 +307,15 @@ export function findPossibleMove(grid) {
     [-1, 0]
   ]
   let bombPair = null
-  for (let r = 0; r < BOARD_SIZE; r++) {
-    for (let c = 0; c < BOARD_SIZE; c++) {
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
       const t = grid[r][c]
       if (!t) continue
       if (t.kind === 'rainbow') {
         for (const [dr, dc] of fourDirs) {
           const r2 = r + dr
           const c2 = c + dc
-          if (r2 >= 0 && r2 < BOARD_SIZE && c2 >= 0 && c2 < BOARD_SIZE && grid[r2][c2]) {
+          if (r2 >= 0 && r2 < rows && c2 >= 0 && c2 < cols && grid[r2][c2]) {
             return { r, c, r2, c2 }
           }
         }
@@ -316,9 +324,9 @@ export function findPossibleMove(grid) {
         const r2 = r
         const c2 = c + 1
         const r3 = r + 1
-        if (c2 < BOARD_SIZE && grid[r][c2] && grid[r][c2].kind === 'bomb') {
+        if (c2 < cols && grid[r][c2] && grid[r][c2].kind === 'bomb') {
           bombPair = { r, c, r2, c2 }
-        } else if (r3 < BOARD_SIZE && grid[r3][c] && grid[r3][c].kind === 'bomb') {
+        } else if (r3 < rows && grid[r3][c] && grid[r3][c].kind === 'bomb') {
           bombPair = { r, c, r2: r3, c2: c }
         }
       }
@@ -326,8 +334,8 @@ export function findPossibleMove(grid) {
   }
   if (bombPair) return bombPair
 
-  for (let r = 0; r < BOARD_SIZE; r++) {
-    for (let c = 0; c < BOARD_SIZE; c++) {
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
       if (!grid[r][c]) continue
       const dirs = [
         [0, 1],
@@ -336,7 +344,7 @@ export function findPossibleMove(grid) {
       for (const [dr, dc] of dirs) {
         const r2 = r + dr
         const c2 = c + dc
-        if (r2 >= BOARD_SIZE || c2 >= BOARD_SIZE) continue
+        if (r2 >= rows || c2 >= cols) continue
         if (!grid[r2][c2]) continue
         swapCells(grid, r, c, r2, c2)
         const hit = findMatchGroups(grid).length > 0
@@ -353,10 +361,11 @@ export function findPossibleMove(grid) {
 // - 新方块只写入 grid，渲染坐标交给调用方（先摆到棋盘上方再落入）
 // 返回 spawned: [{ tile, r, c }]
 export function collapseColumns(grid) {
+  const { rows, cols } = dims(grid)
   const spawned = []
-  for (let c = 0; c < BOARD_SIZE; c++) {
-    let write = BOARD_SIZE - 1
-    for (let r = BOARD_SIZE - 1; r >= 0; r--) {
+  for (let c = 0; c < cols; c++) {
+    let write = rows - 1
+    for (let r = rows - 1; r >= 0; r--) {
       const t = grid[r][c]
       if (t) {
         if (write !== r) {
@@ -379,9 +388,10 @@ export function collapseColumns(grid) {
 
 // 洗牌：只重排普通块的 type（特殊块的 kind/type 保持不动），直到存在可行步
 export function reshuffleTypes(grid) {
+  const { rows, cols } = dims(grid)
   const normals = []
-  for (let r = 0; r < BOARD_SIZE; r++) {
-    for (let c = 0; c < BOARD_SIZE; c++) {
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
       if (grid[r][c] && grid[r][c].kind === 'normal') normals.push(grid[r][c])
     }
   }

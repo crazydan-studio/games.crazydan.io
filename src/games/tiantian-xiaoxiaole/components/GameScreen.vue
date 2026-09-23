@@ -7,6 +7,7 @@ import GameBoard from './GameBoard.vue'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import { playSound, isMuted, toggleMute } from '../utils/sound'
+import { settings } from '../store/settings'
 
 const props = defineProps({
   mode: { type: String, default: 'classic' }
@@ -106,7 +107,7 @@ if (import.meta.env.DEV) {
     <GameBoard :game="game" />
 
     <div class="action-row">
-      <button class="btn ghost tiny" @click="game.showHint()">
+      <button v-if="settings.hint" class="btn ghost tiny" @click="game.showHint()">
         <Icon name="bulb" /> 提示
       </button>
       <button class="btn ghost tiny" @click="game.restart()">

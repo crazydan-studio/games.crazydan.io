@@ -10,8 +10,8 @@ const games = [
     id: 'tiantian-xiaoxiaole',
     name: '天天消消乐',
     tagline: '天天的表情 · 三连消',
-    desc: '以宠物猫「天天」的表情为主题的三消游戏：拍下它的各种表情，实时变成棋盘上的消除元素。4 连生成炸弹猫、5 连召唤彩虹猫，支持 PWA 离线畅玩。',
-    tags: ['三消', '休闲', '摄像头表情', 'PWA 离线'],
+    desc: '以宠物猫「天天」的表情为主题的三消游戏：拍下它的各种表情，实时变成棋盘上的消除元素。4 连生成炸弹猫、5 连召唤彩虹猫，可离线畅玩，也可安装到桌面随时开玩。',
+    tags: ['三消', '休闲', '拍猫咪表情', '离线可玩'],
     path: './tiantian-xiaoxiaole/'
   }
 ]
@@ -66,15 +66,12 @@ function play(game) {
           </svg>
         </div>
         <h3>更多游戏，敬请期待</h3>
-        <p>新的游戏将以 src/games/ 下的新子目录形式持续加入这个合集。</p>
+        <p>更多好玩的小游戏正在制作中，将陆续和大家见面。</p>
       </div>
     </main>
 
     <footer class="footer">
-      <p>
-        © 2026 Crazydan Studio · 代码遵循 <a href="./LICENSE">Apache-2.0</a> 协议 ·
-        <a href="https://github.com/crazydan-studio/games.crazydan.io" target="_blank" rel="noreferrer">GitHub</a>
-      </p>
+      <p>© 2026 <a href="https://studio.crazydan.org/" target="_blank" rel="noreferrer">Crazydan Studio</a></p>
     </footer>
   </div>
 </template>

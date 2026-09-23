@@ -9,8 +9,10 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| 经典闯关 | 8×8 棋盘，25 步内达到目标分即通关，无限关卡，三星评价 |
+| 经典闯关 | 25 步内达到目标分即通关，无限关卡，三星评价 |
 | 限时挑战 | 60 秒内尽量多得分，本地记录最高分 |
+| URL 锚点路由 | `#classic` / `#time` 直达对应模式，浏览器回退/前进在家屏与游戏屏间切换 |
+| 游戏设置 | 主页可开关：提示辅助（提示按钮 + 自动提示，默认禁用）、颜色角标（默认禁用）；棋盘矩阵可选小图标 8×8 / 大图标 6×8（缺省）/ 特大图标 6×6，下一局生效 |
 | 炸弹猫（4 连） | 单线 4 连生成炸弹猫，消除时引爆 3×3，可连环引爆 |
 | 彩虹猫（5 连/L 形） | 与任意相邻表情交换即清除全场同款；双彩虹交换清空全场 |
 | PWA 离线可玩 | Service Worker 缓存应用壳，打开一次后断网随时可玩，可安装到桌面/主屏 |
@@ -42,7 +44,7 @@ pnpm install
 #   门户 http://localhost:5173/ ，本游戏 http://localhost:5173/tiantian-xiaoxiaole/
 pnpm dev                      # 在仓库根执行
 
-# 引擎单元测试（纯逻辑，19 项断言）
+# 引擎单元测试（纯逻辑，24 项断言，含 6×8 非方阵棋盘用例）
 pnpm test
 
 # 重新生成示例表情包静态资源（可选，仓库已含产物）
@@ -155,10 +157,12 @@ expressions/
 | --- | --- | --- |
 | 表情图片（Blob） | IndexedDB `tiantian-xiaoxiaole/expressions` | 刷新/重启浏览器不丢 |
 | 6 个元素槽位 | localStorage `ttxsl-slots-v1` | 指向表情 id |
+| 游戏设置 | localStorage `ttxsl-settings-v1` | 提示/角标/矩阵，见 `store/settings.js` |
 | 限时模式最高分 | localStorage `ttxsl-best` | |
 | 静音开关 | localStorage `ttxsl-muted` | |
 | 特殊块教学提示标记 | localStorage `ttxsl-seen-bomb/rainbow` | 仅首次弹 toast |
 | 应用壳静态资源 | CacheStorage `ttxsl-cache-v2` | PWA 离线可玩 |
+| 宿主环境 HUD 隐藏 | localStorage `nl-hud:public:v1` | 入口页加载前写入 `hidden`（若宿主注入悬浮工具条则隐藏） |
 
 清理数据：浏览器设置里清除站点数据即可。
 
@@ -175,17 +179,18 @@ expressions/
 │   └── expressions/          # 示例表情包（静态资源部署契约）
 ├── scripts/                  # 以下脚本位于仓库根 scripts/ 目录
 │   ├── gen-sample-pack.mjs   # 生成示例表情包
-│   └── test-engine.mjs       # 引擎单元测试（19 项断言）
+│   └── test-engine.mjs       # 引擎单元测试（24 项断言）
 └── src/games/tiantian-xiaoxiaole/
-    ├── index.html            # 入口页（manifest + apple-touch-icon meta；线上 /tiantian-xiaoxiaole/，由 gamePages 插件映射）
-    ├── main.js / App.vue     # 应用壳：屏幕路由 + SW 注册 + 缓存补热
+    ├── index.html            # 入口页（manifest + apple-touch-icon meta；加载前写入 nl-hud 键；线上 /tiantian-xiaoxiaole/，由 gamePages 插件映射）
+    ├── main.js / App.vue     # 应用壳：#classic/#time 锚点路由 + SW 注册 + 缓存补热
     ├── README.md             # 本说明
     ├── style.css             # 设计系统（暖色猫咪主题）
     ├── game/
-    │   ├── engine.js         # 消消乐纯逻辑引擎（匹配簇/特殊块/连锁/死局）
+    │   ├── engine.js         # 消消乐纯逻辑引擎（任意行列矩阵：匹配簇/特殊块/连锁/死局）
     │   └── useGame.js        # 状态机（动画时序/特殊块激活/计分/关卡/限时）
     ├── store/
     │   ├── expressions.js    # 表情库 + 槽位（IndexedDB 持久化）
+    │   ├── settings.js       # 游戏设置（提示/角标/矩阵大小，localStorage 持久化）
     │   ├── pwa.js            # PWA 状态（离线徽章/安装提示）
     │   └── ui.js             # 全局 UI 状态（弹窗暂停计时）
     ├── utils/
@@ -195,9 +200,9 @@ expressions/
     │   ├── sound.js          # WebAudio 合成音效
     │   └── toast.js          # 全局提示
     └── components/
-        ├── HomeScreen.vue    # 主页（特殊元素图例 + PWA 徽章）
+        ├── HomeScreen.vue    # 主页（特殊元素图例 + PWA 徽章 + 游戏设置弹窗）
         ├── GameScreen.vue    # 游戏 HUD + 结算
-        ├── GameBoard.vue     # 棋盘渲染 + 手势 + 特殊块动画
+        ├── GameBoard.vue     # 棋盘渲染 + 手势 + 特殊块动画（动态行列）
         ├── CameraModal.vue   # 摄像头拍摄
         ├── ExpressionManager.vue  # 表情管理/导入导出
         └── Icon/Modal/Toasts/CatFace  # 基础组件

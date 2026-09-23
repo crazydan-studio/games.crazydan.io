@@ -3,7 +3,6 @@
 // 以及特殊块（炸弹猫 / 彩虹猫）的诞生、激活与连锁
 import { reactive, ref, computed } from 'vue'
 import {
-  BOARD_SIZE,
   createBoard,
   findMatchGroups,
   findPossibleMove,
@@ -15,6 +14,7 @@ import {
 import { playSound } from '../utils/sound'
 import { toast } from '../utils/toast'
 import { uiState } from '../store/ui'
+import { settings, boardDims } from '../store/settings'
 
 const SWAP_MS = 200 // 交换动画
 const POP_MS = 300 // 消除动画
@@ -28,8 +28,10 @@ const raf2 = () => new Promise((resolve) => requestAnimationFrame(() => requestA
 
 export function createGame(mode) {
   const modeRef = ref(mode) // 'classic' | 'time'
+  // 开局时快照当前设置里的棋盘尺寸（局中不交尺寸）
+  const { rows: ROWS, cols: COLS } = boardDims()
   const grid = reactive(
-    Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null))
+    Array.from({ length: ROWS }, () => Array(COLS).fill(null))
   )
   const tiles = reactive([]) // 渲染用扁平列表，元素与 grid 中共用同一对象
   const score = ref(0)
@@ -56,13 +58,13 @@ export function createGame(mode) {
   }
 
   function loadBoard() {
-    const g = createBoard()
+    const g = createBoard(ROWS, COLS)
     tiles.length = 0
-    for (let r = 0; r < BOARD_SIZE; r++) {
-      for (let c = 0; c < BOARD_SIZE; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
         const t = g[r][c]
         t.x = c
-        t.y = r - BOARD_SIZE - 1 // 初始摆在棋盘上方 → 开局整体落入
+        t.y = r - ROWS - 1 // 初始摆在棋盘上方 → 开局整体落入
         grid[r][c] = t
         tiles.push(t)
       }
@@ -72,8 +74,8 @@ export function createGame(mode) {
   async function playIntro() {
     state.value = 'busy'
     await raf2()
-    for (let r = 0; r < BOARD_SIZE; r++) {
-      for (let c = 0; c < BOARD_SIZE; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
         grid[r][c].y = r
       }
     }
@@ -132,11 +134,11 @@ export function createGame(mode) {
     clearAllTimers()
   }
 
-  // ---------- 提示（闲置 5 秒自动亮起） ----------
+  // ---------- 提示（闲置 5 秒自动亮起；可在设置中整体禁用） ----------
   function resetIdleTimer() {
     clearTimeout(idleTimer)
     hint.value = null
-    if (state.value !== 'idle') return
+    if (state.value !== 'idle' || !settings.hint) return
     idleTimer = setTimeout(() => {
       if (state.value !== 'idle' || uiState.overlay) return
       const mv = findPossibleMove(grid)
@@ -170,8 +172,8 @@ export function createGame(mode) {
     const id = ++popSeq
     popups.push({
       id,
-      left: `${((c + 0.5) / BOARD_SIZE) * 100}%`,
-      top: `${((r + 0.5) / BOARD_SIZE) * 100}%`,
+      left: `${((c + 0.5) / COLS) * 100}%`,
+      top: `${((r + 0.5) / ROWS) * 100}%`,
       text
     })
     setTimeout(() => {
@@ -297,12 +299,12 @@ export function createGame(mode) {
       else playSound(combo >= 2 ? 'combo' : 'pop')
 
       // 标记动画：基础消除正常 pop，连锁波及闪白
-      const baseKeys = new Set(baseCells.map((x) => x.r * BOARD_SIZE + x.c))
+      const baseKeys = new Set(baseCells.map((x) => x.r * COLS + x.c))
       for (const cell of cells) {
         const t = grid[cell.r][cell.c]
         if (t) {
           t.removing = true
-          if (!baseKeys.has(cell.r * BOARD_SIZE + cell.c)) t.blasted = true
+          if (!baseKeys.has(cell.r * COLS + cell.c)) t.blasted = true
         }
       }
 
@@ -335,16 +337,16 @@ export function createGame(mode) {
     let initial = []
     if (isSuper) {
       // 双彩虹：清空全场
-      for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
           if (grid[r][c]) initial.push({ r, c })
         }
       }
     } else {
       // 与普通块/炸弹交换：清除全场该类型（同类型炸弹会连锁引爆）
       const targetType = partner.type
-      for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
           const t = grid[r][c]
           if (t && (t.type === targetType || t === rb)) initial.push({ r, c })
         }
@@ -354,8 +356,8 @@ export function createGame(mode) {
     // 主动激活的彩虹猫不再二次触发；双彩虹时其他彩虹猫也静默
     const silentIds = new Set([rb.id])
     if (isSuper) {
-      for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
           const t = grid[r][c]
           if (t && t.kind === 'rainbow') silentIds.add(t.id)
         }
@@ -403,8 +405,8 @@ export function createGame(mode) {
   }
 
   function posOf(tile) {
-    for (let r = 0; r < BOARD_SIZE; r++) {
-      for (let c = 0; c < BOARD_SIZE; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
         if (grid[r][c] === tile) return { r, c }
       }
     }
@@ -497,8 +499,8 @@ export function createGame(mode) {
   }
 
   function findSelectedPos() {
-    for (let r = 0; r < BOARD_SIZE; r++) {
-      for (let c = 0; c < BOARD_SIZE; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
         if (grid[r][c] && grid[r][c].id === selectedId.value) return { r, c }
       }
     }
@@ -534,6 +536,8 @@ export function createGame(mode) {
     // 状态
     grid,
     tiles,
+    rows: ROWS,
+    cols: COLS,
     score,
     moves,
     level,

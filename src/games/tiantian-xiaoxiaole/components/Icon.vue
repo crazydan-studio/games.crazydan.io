@@ -29,7 +29,8 @@ const ICONS = {
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   bomb: '<circle cx="10.5" cy="14" r="6.5"/><path d="M15.1 9.4l2.3-2.3"/><path d="M17.8 3.6l.8 1.5 1.5.8-1.5.8-.8 1.5-.8-1.5-1.5-.8 1.5-.8z"/>',
   rainbow: '<path d="M4.5 17a7.5 7.5 0 0 1 15 0"/><path d="M8 17a4 4 0 0 1 8 0"/><path d="M2.5 17h2M19.5 17h2"/>',
-  'wifi-off': '<path d="M3 3l18 18"/><path d="M4.5 10a13 13 0 0 1 3.5-2.5"/><path d="M9.5 6.3a13 13 0 0 1 6.5.9"/><path d="M16.5 8.3a13 13 0 0 1 3 1.7"/><path d="M7 14a8 8 0 0 1 2-1.4"/><path d="M13.5 12.9a8 8 0 0 1 3.5 1.1"/><path d="M12 18.5h.01"/>'
+  'wifi-off': '<path d="M3 3l18 18"/><path d="M4.5 10a13 13 0 0 1 3.5-2.5"/><path d="M9.5 6.3a13 13 0 0 1 6.5.9"/><path d="M16.5 8.3a13 13 0 0 1 3 1.7"/><path d="M7 14a8 8 0 0 1 2-1.4"/><path d="M13.5 12.9a8 8 0 0 1 3.5 1.1"/><path d="M12 18.5h.01"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>'
 }
 
 const html = computed(() => ICONS[props.name] || '')

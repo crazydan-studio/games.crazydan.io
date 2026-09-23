@@ -71,7 +71,7 @@ defineEmits(['play'])
 
     <!-- 操作条 -->
     <footer class="foot">
-      <span class="path">{{ game.path }}</span>
+      <span class="play-hint">无需安装 · 打开即玩</span>
       <button class="play-btn" type="button" @click="$emit('play')">
         开始游戏
         <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

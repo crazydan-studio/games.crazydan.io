@@ -108,7 +108,7 @@ async function onLoadFromServer() {
   try {
     const { manifest, items } = await loadPackFromUrl(serverUrl.value)
     if (!items.length) {
-      toast('服务器表情包为空（items 为 0）')
+      toast('这个表情包里还没有表情', 'error')
       return
     }
     const fileToId = await importItems(items)
@@ -185,7 +185,7 @@ async function onLoadFromServer() {
       <section>
         <h4>
           我的表情库
-          <span class="mini">{{ expressions.length }} 个 · 保存在浏览器本地（IndexedDB）</span>
+          <span class="mini">{{ expressions.length }} 个 · 只保存在这台设备的浏览器里</span>
         </h4>
 
         <div v-if="!expressions.length" class="empty">

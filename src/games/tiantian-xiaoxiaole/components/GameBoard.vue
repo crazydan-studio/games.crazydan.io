@@ -1,11 +1,13 @@
 <script setup>
 // ============ 棋盘：渲染 + 手势交互（点击选择 / 滑动交换） ============
 // 特殊块：炸弹猫（虚线警戒环）/ 彩虹猫（旋转彩虹盘）
-import { ref } from 'vue'
+// 棋盘行列数由 game.rows / game.cols 提供（支持 8×8 / 6×8 / 6×6 等矩阵）
+import { computed, ref } from 'vue'
 import CatFace from './CatFace.vue'
 import Icon from './Icon.vue'
 import { RAINBOW_VARIANT } from '../utils/catface'
 import { slotImages } from '../store/expressions'
+import { settings } from '../store/settings'
 
 const props = defineProps({
   game: { type: Object, required: true }
@@ -14,8 +16,17 @@ const props = defineProps({
 const boardEl = ref(null)
 const drag = ref(null) // { r, c, px, py, moved }
 
+const rows = computed(() => props.game.rows || 8)
+const cols = computed(() => props.game.cols || 8)
+
+// 棋盘动态样式：宽高比 + 网格底纹随行列数变化
+const boardStyle = computed(() => ({
+  aspectRatio: `${cols.value} / ${rows.value}`,
+  backgroundSize: `${100 / cols.value}% ${100 / rows.value}%`
+}))
+
 function cellSizePx() {
-  return boardEl.value ? boardEl.value.clientWidth / 8 : 50
+  return boardEl.value ? boardEl.value.clientWidth / cols.value : 50
 }
 
 function cellFromEvent(e) {
@@ -24,8 +35,8 @@ function cellFromEvent(e) {
   const x = e.clientX - rect.left
   const y = e.clientY - rect.top
   if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null
-  const c = Math.min(7, Math.max(0, Math.floor((x / rect.width) * 8)))
-  const r = Math.min(7, Math.max(0, Math.floor((y / rect.height) * 8)))
+  const c = Math.min(cols.value - 1, Math.max(0, Math.floor((x / rect.width) * cols.value)))
+  const r = Math.min(rows.value - 1, Math.max(0, Math.floor((y / rect.height) * rows.value)))
   return { r, c }
 }
 
@@ -58,7 +69,7 @@ function onPointerMove(e) {
   else dr = dy > 0 ? 1 : -1
   const r2 = d.r + dr
   const c2 = d.c + dc
-  if (r2 >= 0 && r2 < 8 && c2 >= 0 && c2 < 8) {
+  if (r2 >= 0 && r2 < rows.value && c2 >= 0 && c2 < cols.value) {
     props.game.trySwap(d.r, d.c, r2, c2)
   }
 }
@@ -77,6 +88,8 @@ function isHinted(t) {
 
 function tileStyle(t) {
   return {
+    width: `${100 / cols.value}%`,
+    height: `${100 / rows.value}%`,
     transform: `translate(${t.x * 100}%, ${t.y * 100}%)`,
     zIndex: t.removing ? 6 : undefined
   }
@@ -89,6 +102,7 @@ function tileStyle(t) {
       ref="boardEl"
       class="board"
       data-testid="board"
+      :style="boardStyle"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
@@ -133,7 +147,7 @@ function tileStyle(t) {
             <CatFace v-else :variant="t.type" />
           </template>
 
-          <i v-if="t.kind !== 'rainbow'" class="type-dot"></i>
+          <i v-if="settings.corner && t.kind !== 'rainbow'" class="type-dot"></i>
           <span v-if="t.kind === 'bomb'" class="spec-glyph glyph-bomb" aria-hidden="true">
             <Icon name="bomb" />
           </span>
@@ -166,13 +180,12 @@ function tileStyle(t) {
 .board {
   position: relative;
   width: 100%;
-  aspect-ratio: 1;
   border-radius: 22px;
   background: #ffefda;
   background-image:
     linear-gradient(rgba(93, 64, 55, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(93, 64, 55, 0.05) 1px, transparent 1px);
-  background-size: 12.5% 12.5%;
+  /* aspect-ratio 与 background-size 由棋盘行列数动态注入（boardStyle） */
   box-shadow:
     inset 0 3px 12px rgba(93, 64, 55, 0.1),
     0 8px 24px rgba(93, 64, 55, 0.14);
@@ -212,8 +225,7 @@ function tileStyle(t) {
   position: absolute;
   left: 0;
   top: 0;
-  width: 12.5%;
-  height: 12.5%;
+  /* 宽高由棋盘行列数动态注入（tileStyle） */
   padding: 3px;
   transition: transform 0.3s cubic-bezier(0.25, 0.9, 0.35, 1.12);
   will-change: transform;

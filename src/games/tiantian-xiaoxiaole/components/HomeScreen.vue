@@ -1,14 +1,18 @@
 <script setup>
 // ============ 主页 ============
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Icon from './Icon.vue'
 import CatFace from './CatFace.vue'
+import Modal from './Modal.vue'
 import { expressions, slots } from '../store/expressions'
 import { pwaState, promptInstall } from '../store/pwa'
+import { settings, updateSettings, BOARD_PRESETS } from '../store/settings'
 
 defineEmits(['start', 'camera', 'manage'])
 
 const usedCount = computed(() => slots.value.filter(Boolean).length)
+
+const showSettings = ref(false)
 
 async function onInstall() {
   const ok = await promptInstall()
@@ -54,6 +58,10 @@ function emitHint() {
         <Icon name="image" />
         <span>表情管理 / 导入导出</span>
       </button>
+      <button class="menu-btn settings-btn" @click="showSettings = true">
+        <Icon name="sliders" />
+        <span>游戏设置</span>
+      </button>
     </div>
 
     <!-- 特殊元素图例 -->
@@ -94,6 +102,73 @@ function emitHint() {
     <p class="install-tip" hidden>
       在浏览器菜单里选「添加到主屏幕 / 安装应用」，断网也能随时陪天天玩～
     </p>
+
+    <!-- 游戏设置 -->
+    <Modal v-if="showSettings" @close="showSettings = false">
+      <div class="settings">
+        <header class="settings-head">
+          <h3><Icon name="sliders" /> 游戏设置</h3>
+          <button class="icon-btn" aria-label="关闭" @click="showSettings = false">
+            <Icon name="close" />
+          </button>
+        </header>
+
+        <div class="set-row">
+          <div class="set-text">
+            <b>提示辅助</b>
+            <i>显示「提示」按钮，停顿时自动点亮可行一步</i>
+          </div>
+          <button
+            class="switch"
+            :class="{ on: settings.hint }"
+            role="switch"
+            :aria-checked="settings.hint"
+            aria-label="提示辅助"
+            @click="updateSettings({ hint: !settings.hint })"
+          >
+            <i class="knob"></i>
+          </button>
+        </div>
+
+        <div class="set-row">
+          <div class="set-text">
+            <b>颜色角标</b>
+            <i>在消除块右下角显示颜色小圆点</i>
+          </div>
+          <button
+            class="switch"
+            :class="{ on: settings.corner }"
+            role="switch"
+            :aria-checked="settings.corner"
+            aria-label="颜色角标"
+            @click="updateSettings({ corner: !settings.corner })"
+          >
+            <i class="knob"></i>
+          </button>
+        </div>
+
+        <div class="set-block">
+          <div class="set-text">
+            <b>图标大小</b>
+            <i>矩阵越小，表情越大越好看清（下一局开始时生效）</i>
+          </div>
+          <div class="seg">
+            <button
+              v-for="p in BOARD_PRESETS"
+              :key="p.id"
+              class="seg-item"
+              :class="{ on: settings.board === p.id }"
+              @click="updateSettings({ board: p.id })"
+            >
+              <b>{{ p.name }}</b>
+              <span>{{ p.matrix }}</span>
+            </button>
+          </div>
+        </div>
+
+        <button class="btn primary" @click="showSettings = false">完成</button>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -202,6 +277,13 @@ function emitHint() {
 .menu-btn.accent {
   background: linear-gradient(135deg, #ffa3b5, #ff7d95);
   color: #fff;
+}
+
+/* 设置按钮：跨两列的横向按钮 */
+.menu-btn.settings-btn {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  padding: 14px 18px;
 }
 
 .home-tip {
@@ -372,5 +454,149 @@ button.pwa-chip.install {
   color: var(--text-soft);
   text-align: center;
   max-width: 320px;
+}
+
+/* ---- 游戏设置 ---- */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 2px;
+}
+
+.settings-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.set-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.set-text b {
+  font-size: 14.5px;
+}
+
+.set-text i {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+/* 开关 */
+.switch {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: #e5d5bd;
+  cursor: pointer;
+  flex: none;
+  transition: background 0.18s;
+}
+
+.switch .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(93, 64, 55, 0.35);
+  transition: transform 0.18s;
+}
+
+.switch.on {
+  background: linear-gradient(135deg, #ffb347, #f07e1d);
+}
+
+.switch.on .knob {
+  transform: translateX(20px);
+}
+
+.set-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.seg {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.seg-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.seg-item b {
+  font-size: 13px;
+}
+
+.seg-item span {
+  font-size: 11.5px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.seg-item.on {
+  border-color: var(--primary);
+  box-shadow: 0 6px 14px rgba(240, 126, 29, 0.22);
+  transform: translateY(-1px);
+}
+
+.seg-item.on b {
+  color: var(--primary-deep);
+}
+
+.settings > .btn {
+  align-self: stretch;
+}
+
+@media (max-width: 420px) {
+  .seg {
+    gap: 6px;
+  }
+
+  .seg-item b {
+    font-size: 12px;
+  }
 }
 </style>
