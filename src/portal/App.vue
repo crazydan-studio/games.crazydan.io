@@ -5,6 +5,8 @@ import GameCard from './components/GameCard.vue'
 // 新增游戏时在此追加入口即可（README「新增游戏」有完整步骤）：
 // - path 生产构建后的同域子目录（相对路径，任意子路径静态部署均可用），
 //   开发态与生产构建后行为一致 —— 同一 dev server 下即 ./<name>/
+// - preview 卡片头图动画类型，GameCard 按其渲染专属预览
+//   （match3 = 三消元素砖；pet = 电子宠物照顾循环）
 const games = [
   {
     id: 'tiantian-xiaoxiaole',
@@ -12,6 +14,7 @@ const games = [
     tagline: '天天的表情 · 三连消',
     desc: '以宠物猫「天天」的表情为主题的三消游戏：拍下它的各种表情，实时变成棋盘上的消除元素。4 连生成炸弹猫、5 连召唤彩虹猫，可离线畅玩，也可安装到桌面随时开玩。',
     tags: ['三消', '休闲', '拍猫咪表情', '离线可玩'],
+    preview: 'match3',
     path: './tiantian-xiaoxiaole/'
   },
   {
@@ -20,6 +23,7 @@ const games = [
     tagline: '电波里的生命 · 随身养成',
     desc: '领养一只只存在于屏幕里的小伙伴：它会饿、会困、会撒娇，也会随着时间慢慢长大。时间可与现实同步或加速，还能接入 AI 大模型，让宠物由智能体驱动真正「活」起来。存档可导出分享、跨设备同步。',
     tags: ['养成', '电子宠物', 'AI 生命', '离线可玩'],
+    preview: 'pet',
     path: './tiantian-dianchong/'
   }
 ]

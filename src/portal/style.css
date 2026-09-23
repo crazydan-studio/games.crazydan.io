@@ -193,6 +193,266 @@ a:hover {
   animation-delay: 2.1s;
 }
 
+/* ---------- 头图（电宠）：电子宠物照顾循环 ---------- */
+/* 12s 一轮完整玩法叙事：开心 → 状态衰减/宠物难过 →
+   照顾气泡（喂食/玩耍/洗澡）→ 状态回升 + 喵呜～撒娇 + 成长 */
+.preview--pet {
+  background:
+    radial-gradient(circle at 22% 16%, rgba(255, 255, 255, 0.7), transparent 45%),
+    linear-gradient(150deg, #d9f5ea 0%, #a6e6cf 55%, #7bd9bb 100%);
+}
+
+/* 宠物本体：与游戏内 PetAvatar 同款猫咪造型 */
+.pet-preview {
+  position: absolute;
+  left: clamp(14px, 6%, 40px);
+  bottom: 6px;
+  width: clamp(104px, 38%, 128px);
+  animation: pet-bob 3.6s ease-in-out infinite;
+}
+
+.pet-preview svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 10px 16px rgba(27, 100, 82, 0.28));
+}
+
+/* 电波涟漪（电波里的生命） */
+.pet-wave {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  display: block;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: pet-wave-out 3s ease-out infinite;
+}
+
+.pet-wave.w2 {
+  animation-delay: 1.5s;
+}
+
+/* 尾巴摇摆 */
+.pet-tail {
+  transform-box: fill-box;
+  transform-origin: 10% 90%;
+  animation: tail-wag 1.8s ease-in-out infinite;
+}
+
+/* 眨眼 */
+.pet-eyes {
+  transform-box: fill-box;
+  transform-origin: 50% 45%;
+  animation: pet-blink 4.6s infinite;
+}
+
+/* 情绪切换：开心 ^^ / 难过（与状态条衰减同步） */
+.eye-happy,
+.mouth-happy,
+.pet-blush {
+  animation: mood-happy 12s ease-in-out infinite;
+}
+
+.eye-sad,
+.mouth-sad {
+  opacity: 0;
+  animation: mood-sad 12s ease-in-out infinite;
+}
+
+/* 撒娇说话气泡 */
+.pet-say {
+  position: absolute;
+  left: 14%;
+  top: -30px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2e4a42;
+  background: #fff;
+  padding: 4px 11px;
+  border-radius: 11px;
+  box-shadow: 0 4px 10px rgba(27, 100, 82, 0.2);
+  opacity: 0;
+  animation: say-pop 12s ease-in-out infinite;
+}
+
+.pet-say::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+/* 照顾气泡：喂食 / 玩耍 / 洗澡（同游戏内操作） */
+.care-bubble {
+  position: absolute;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  line-height: 1;
+  background: #fff;
+  border: 2px solid rgba(38, 185, 154, 0.35);
+  border-radius: 50%;
+  box-shadow: 0 5px 12px rgba(27, 100, 82, 0.22);
+  opacity: 0;
+}
+
+.b-feed {
+  left: clamp(4px, 2%, 18px);
+  top: 84px;
+  animation: pop-feed 12s ease-in-out infinite;
+}
+
+.b-play {
+  left: clamp(120px, 40%, 210px);
+  top: 40px;
+  animation: pop-play 12s ease-in-out infinite;
+}
+
+.b-bathe {
+  left: clamp(124px, 44%, 236px);
+  top: 126px;
+  animation: pop-bathe 12s ease-in-out infinite;
+}
+
+/* 恢复开心后飘起的爱心 */
+.care-heart {
+  position: absolute;
+  z-index: 2;
+  font-size: 15px;
+  opacity: 0;
+  filter: drop-shadow(0 2px 3px rgba(232, 93, 141, 0.35));
+}
+
+.care-heart.h1 {
+  left: clamp(70px, 28%, 150px);
+  top: 88px;
+  animation: heart-a 12s ease-out infinite;
+}
+
+.care-heart.h2 {
+  left: clamp(104px, 40%, 208px);
+  top: 64px;
+  animation: heart-b 12s ease-out infinite;
+}
+
+/* 迷你状态面板：同游戏内四维状态条（饱食/心情/健康/清洁） */
+.mini-status {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(104px, 36%, 136px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(38, 185, 154, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 6px 16px rgba(27, 100, 82, 0.18);
+}
+
+.mini-stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ms-icon {
+  flex: none;
+  width: 15px;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
+.ms-track {
+  flex: 1;
+  height: 7px;
+  border-radius: 99px;
+  background: #dff0e9;
+  overflow: hidden;
+}
+
+.ms-track i {
+  display: block;
+  height: 100%;
+  width: 88%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #3ed6b5, #1b9379);
+}
+
+.s-hunger i {
+  animation: stat-hunger 12s ease-in-out infinite;
+}
+
+.s-mood i {
+  animation: stat-mood 12s ease-in-out infinite;
+}
+
+.s-health i {
+  animation: stat-health 12s ease-in-out infinite;
+}
+
+.s-hygiene i {
+  animation: stat-hygiene 12s ease-in-out infinite;
+}
+
+/* 成长进度条：时间流逝，慢慢长大 */
+.grow-chip {
+  position: absolute;
+  z-index: 2;
+  right: 14px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(38, 185, 154, 0.28);
+  border-radius: 999px;
+  box-shadow: 0 4px 10px rgba(27, 100, 82, 0.15);
+  font-size: 11px;
+  font-weight: 600;
+  color: #2e4a42;
+}
+
+.gc-emoji {
+  font-size: 13px;
+  animation: sprout-pulse 2.4s ease-in-out infinite;
+}
+
+.gc-bar {
+  width: 44px;
+  height: 6px;
+  border-radius: 99px;
+  background: #dff0e9;
+  overflow: hidden;
+}
+
+.gc-bar i {
+  display: block;
+  height: 100%;
+  width: 12%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #a4e5cf, #26b99a);
+  animation: grow-fill 12s linear infinite;
+}
+
 /* 卡片正文 */
 .body {
   padding: 20px 22px 6px;
@@ -363,6 +623,358 @@ a:hover {
   }
 }
 
+/* ---------- 电宠照顾循环关键帧（12s 一轮，各元素同周期对齐） ---------- */
+
+/* 宠物呼吸起伏 */
+@keyframes pet-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* 电波涟漪外扩 */
+@keyframes pet-wave-out {
+  0% {
+    transform: scale(0.25);
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* 尾巴摇摆 */
+@keyframes tail-wag {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+/* 周期性眨眼 */
+@keyframes pet-blink {
+  0%,
+  93.5%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+  96.5% {
+    transform: scaleY(1);
+  }
+}
+
+/* 情绪：开心（循环首尾 + 照顾恢复后） */
+@keyframes mood-happy {
+  0%,
+  46% {
+    opacity: 1;
+  }
+  52%,
+  66% {
+    opacity: 0;
+  }
+  72%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* 情绪：难过（状态衰减期） */
+@keyframes mood-sad {
+  0%,
+  46% {
+    opacity: 0;
+  }
+  52%,
+  66% {
+    opacity: 1;
+  }
+  72%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 撒娇气泡：恢复开心后弹出 */
+@keyframes say-pop {
+  0%,
+  73% {
+    opacity: 0;
+    transform: translateY(5px) scale(0.72);
+  }
+  77% {
+    opacity: 1;
+    transform: translateY(0) scale(1.06);
+  }
+  80% {
+    transform: scale(1);
+  }
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.86);
+  }
+}
+
+/* 照顾气泡：喂食（最早弹出，对应饱食回升） */
+@keyframes pop-feed {
+  0%,
+  51% {
+    opacity: 0;
+    transform: scale(0.2) translateY(10px);
+  }
+  54.5% {
+    opacity: 1;
+    transform: scale(1.18) translateY(-5px);
+  }
+  57% {
+    transform: scale(1) translateY(0);
+  }
+  61% {
+    opacity: 1;
+  }
+  64%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-12px);
+  }
+}
+
+/* 照顾气泡：玩耍（其次，对应心情回升） */
+@keyframes pop-play {
+  0%,
+  58% {
+    opacity: 0;
+    transform: scale(0.2) translateY(10px);
+  }
+  61.5% {
+    opacity: 1;
+    transform: scale(1.18) translateY(-5px);
+  }
+  64% {
+    transform: scale(1) translateY(0);
+  }
+  67% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-12px);
+  }
+}
+
+/* 照顾气泡：洗澡（最后，对应清洁回升） */
+@keyframes pop-bathe {
+  0%,
+  64% {
+    opacity: 0;
+    transform: scale(0.2) translateY(10px);
+  }
+  67.5% {
+    opacity: 1;
+    transform: scale(1.18) translateY(-5px);
+  }
+  70% {
+    transform: scale(1) translateY(0);
+  }
+  73% {
+    opacity: 1;
+  }
+  76%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-12px);
+  }
+}
+
+/* 爱心上飘（照顾后的好心情） */
+@keyframes heart-a {
+  0%,
+  75% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.5);
+  }
+  79% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
+  }
+  91%,
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(1.1);
+  }
+}
+
+@keyframes heart-b {
+  0%,
+  82% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.5);
+  }
+  86% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
+  }
+  98%,
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(1.1);
+  }
+}
+
+/* 四维状态条：先衰减（宠物难过）→ 照顾后逐一回升 */
+@keyframes stat-hunger {
+  0% {
+    width: 90%;
+  }
+  38% {
+    width: 87%;
+  }
+  50% {
+    width: 24%;
+    background: linear-gradient(90deg, #f08d8d, #e85d5d);
+  }
+  55% {
+    width: 24%;
+    background: linear-gradient(90deg, #f08d8d, #e85d5d);
+  }
+  61% {
+    background: linear-gradient(90deg, #3ed6b5, #1b9379);
+  }
+  63% {
+    width: 96%;
+  }
+  72% {
+    width: 91%;
+  }
+  86% {
+    width: 93%;
+  }
+  100% {
+    width: 90%;
+  }
+}
+
+@keyframes stat-mood {
+  0% {
+    width: 88%;
+  }
+  38% {
+    width: 85%;
+  }
+  50% {
+    width: 38%;
+    background: linear-gradient(90deg, #ffc46b, #f0a03c);
+  }
+  61% {
+    width: 38%;
+    background: linear-gradient(90deg, #ffc46b, #f0a03c);
+  }
+  67% {
+    background: linear-gradient(90deg, #3ed6b5, #1b9379);
+  }
+  69% {
+    width: 95%;
+  }
+  78% {
+    width: 90%;
+  }
+  100% {
+    width: 88%;
+  }
+}
+
+@keyframes stat-health {
+  0% {
+    width: 95%;
+  }
+  40% {
+    width: 93%;
+  }
+  56% {
+    width: 68%;
+  }
+  70% {
+    width: 64%;
+  }
+  92% {
+    width: 94%;
+  }
+  100% {
+    width: 95%;
+  }
+}
+
+@keyframes stat-hygiene {
+  0% {
+    width: 86%;
+  }
+  38% {
+    width: 83%;
+  }
+  50% {
+    width: 44%;
+    background: linear-gradient(90deg, #ffc46b, #f0a03c);
+  }
+  67% {
+    width: 44%;
+    background: linear-gradient(90deg, #ffc46b, #f0a03c);
+  }
+  73% {
+    background: linear-gradient(90deg, #3ed6b5, #1b9379);
+  }
+  75% {
+    width: 93%;
+  }
+  84% {
+    width: 89%;
+  }
+  100% {
+    width: 86%;
+  }
+}
+
+/* 成长条：整个循环持续填充 */
+@keyframes grow-fill {
+  0% {
+    width: 10%;
+  }
+  90%,
+  100% {
+    width: 100%;
+  }
+}
+
+/* 幼芽律动 */
+@keyframes sprout-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.28) rotate(-10deg);
+  }
+}
+
 /* ---------- 移动端适配 ---------- */
 @media (max-width: 480px) {
   .grid {
@@ -380,6 +992,49 @@ a:hover {
   .mini-tile {
     width: 44px;
     height: 44px;
+  }
+
+  /* 电宠 preview：压缩高度下的布局微调 */
+  .pet-preview {
+    left: 12px;
+    bottom: 4px;
+    width: clamp(98px, 32%, 116px);
+  }
+
+  .pet-say {
+    top: -26px;
+    left: 10%;
+  }
+
+  .b-feed {
+    top: 70px;
+  }
+
+  .b-play {
+    top: 30px;
+  }
+
+  .b-bathe {
+    top: 106px;
+  }
+
+  .care-heart.h1 {
+    top: 74px;
+  }
+
+  .care-heart.h2 {
+    top: 52px;
+  }
+
+  .mini-status {
+    right: 10px;
+    padding: 9px 10px;
+    gap: 7px;
+  }
+
+  .grow-chip {
+    right: 10px;
+    bottom: 8px;
   }
 
   .foot {
@@ -405,5 +1060,41 @@ a:hover {
 
   .game-card:hover {
     transform: none;
+  }
+
+  /* 电宠 preview：静止版 —— 定格在开心满状态 */
+  .preview--pet .pet-preview,
+  .preview--pet .pet-wave,
+  .preview--pet .pet-tail,
+  .preview--pet .pet-eyes,
+  .preview--pet .eye-happy,
+  .preview--pet .mouth-happy,
+  .preview--pet .pet-blush,
+  .preview--pet .eye-sad,
+  .preview--pet .mouth-sad,
+  .preview--pet .pet-say,
+  .preview--pet .care-bubble,
+  .preview--pet .care-heart,
+  .preview--pet .mini-stat .ms-track i,
+  .preview--pet .gc-emoji,
+  .preview--pet .gc-bar i {
+    animation: none;
+  }
+
+  /* 动画驱动的临时元素改为隐藏，静态呈现干净的完整状态 */
+  .eye-sad,
+  .mouth-sad,
+  .pet-say,
+  .care-bubble,
+  .care-heart {
+    opacity: 0;
+  }
+
+  .mini-stat .ms-track i {
+    width: 88%;
+  }
+
+  .gc-bar i {
+    width: 55%;
   }
 }
