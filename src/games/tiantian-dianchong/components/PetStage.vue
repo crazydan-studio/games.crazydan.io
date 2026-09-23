@@ -1,9 +1,11 @@
 <script setup>
 // ============ 舞台：电子宠物机的「屏幕」 ============
-// 场景背景 + 宠物 + 心声气泡 + 状态胶囊 + 睡眠 Zzz / 病标。
-import { computed } from 'vue'
+// 场景背景 + 骨骼动画画布（spine-webgl）+ 心声气泡 + 状态胶囊 + Zzz/病标。
+// WebGL 不可用时自动降级为参数化 SVG 宠物（PetAvatar），玩法不受影响。
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SceneBackdrop from './SceneBackdrop.vue'
 import PetAvatar from './PetAvatar.vue'
+import { createSpinePetPlayer } from '../spine/SpinePetPlayer.js'
 
 const props = defineProps({
   scene: { type: Object, required: true },
@@ -11,7 +13,7 @@ const props = defineProps({
   species: { type: Object, required: true },
   stageKey: { type: String, default: 'adult' },
   mood: { type: Number, default: 70 },
-  behavior: { type: String, default: 'idle' },
+  behavior: { type: String, default: 'idle' }, // SVG 降级模式的行为
   dead: { type: Boolean, default: false },
   coma: { type: Boolean, default: false },
   asleep: { type: Boolean, default: false },
@@ -22,7 +24,12 @@ const props = defineProps({
   petName: { type: String, default: '' }
 })
 
-const emit = defineEmits(['touch-pet'])
+const emit = defineEmits(['touch-pet', 'spine-ready'])
+
+const canvasEl = ref(null)
+const spineMode = ref(false)
+const player = createSpinePetPlayer()
+let resizeObserver = null
 
 const chips = computed(() => {
   const list = []
@@ -33,6 +40,48 @@ const chips = computed(() => {
   if (!props.dead && !props.coma && props.risk === 'critical') list.push({ cls: 'bad', text: '状态危急' })
   return list
 })
+
+onMounted(async () => {
+  // 画布常驻渲染（透明画布在 WebGL 失败时本就不可见，避免 v-show 隐藏导致初始尺寸为 0）
+  const ok = player.init(canvasEl.value)
+  if (ok) {
+    spineMode.value = true
+    await player.setSpecies(props.species)
+    player.setStageConfig({ groundY: props.scene?.groundY ?? 0.76 })
+    player.setAmbient({ stageKey: props.stageKey, illness: props.illness, dead: props.dead })
+    // 尺寸自适应：观察画布自身（随布局/旋转变化）+ 初始化后的下一帧校准
+    resizeObserver = new ResizeObserver(() => player.resize())
+    resizeObserver.observe(canvasEl.value)
+    requestAnimationFrame(() => player.resize())
+    emit('spine-ready', player)
+  }
+  // WebGL 不可用：spineMode 保持 false，模板渲染 SVG 降级
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  player.dispose()
+})
+
+// ---- 环境态与场景联动 ----
+watch(
+  () => props.species,
+  (sp) => {
+    if (spineMode.value && sp) player.setSpecies(sp)
+  }
+)
+watch(
+  () => [props.stageKey, props.illness, props.dead],
+  ([stageKey, illness, dead]) => {
+    if (spineMode.value) player.setAmbient({ stageKey, illness, dead })
+  }
+)
+watch(
+  () => props.scene,
+  (sc) => {
+    if (spineMode.value) player.setStageConfig({ groundY: sc?.groundY ?? 0.76 })
+  }
+)
 </script>
 
 <template>
@@ -52,8 +101,16 @@ const chips = computed(() => {
     <!-- 病标 / 昏迷标 -->
     <div v-if="illness && !dead" class="sick-pop">🤒</div>
 
-    <!-- 宠物 -->
-    <div class="pet-wrap" @click.stop="$emit('touch-pet')" :title="dead ? '' : `摸摸 ${petName}`">
+    <!-- 骨骼动画画布（WebGL；透明画布常驻，无内容时不可见） -->
+    <canvas
+      ref="canvasEl"
+      class="pet-canvas"
+      :title="dead ? '' : `摸摸 ${petName}`"
+      @click.stop="$emit('touch-pet')"
+    />
+
+    <!-- SVG 降级宠物（WebGL 不可用） -->
+    <div v-if="!spineMode" class="pet-wrap" @click.stop="$emit('touch-pet')" :title="dead ? '' : `摸摸 ${petName}`">
       <PetAvatar
         :species="species"
         :stage-key="stageKey"

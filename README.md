@@ -112,10 +112,13 @@ server {
 ## 测试
 
 ```bash
-pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：生命引擎 130 项断言
-                # （纯逻辑，Node 直接运行，含非方阵棋盘与时间推进/生死开关/AI 降级等用例）
+pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：生命引擎 352 项断言
+                # （纯逻辑，Node 直接运行，含非方阵棋盘与时间推进/生死开关/AI 降级/
+                #  指令总线/动作系统/骨骼资产与真实 Spine 运行时解析等用例）
 ```
 
 ## 协议
 
 本项目代码遵循 [Apache License 2.0](./LICENSE)。
+
+> 例外说明：`@esotericsoftware/spine-webgl`（天天电宠的骨骼动画运行时）为第三方依赖，遵循其自带的 [Spine Runtimes License Agreement](https://github.com/EsotericSoftware/spine-runtimes/blob/4.3/LICENSE)——允许集成与再分发（需保留其版权与许可声明），具体条款以该协议为准；本作的全部骨骼/贴图/动画数据均为运行时程序化生成，不包含任何 Spine 官方示例资产。

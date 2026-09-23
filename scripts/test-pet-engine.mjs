@@ -578,3 +578,394 @@ function advanceHours(save, hours, rng = never) {
 }
 
 console.log(`\n全部 ${passed} 项断言通过 ✅`)
+
+// ---------- 12. 指令系统：协议与总线 ----------
+{
+  const { createCommand, createCommandBus, BEHAVIOR_TO_ACTION, PRIORITIES, COMMAND_ACTIONS } =
+    await import('../src/games/tiantian-dianchong/core/commands.js')
+
+  let r = createCommand('act', { action: 'eat' }, { source: 'user', priority: 10, reason: '玩家喂食' })
+  ok(r.ok && r.command.action === 'eat' && r.command.source === 'user' && r.command.priority === 10, '指令：act 指令构造完整')
+  ok(/^cmd-\d+$/.test(r.command.id) && r.command.id !== createCommand('act', { action: 'idle' }).command.id, '指令：自增 id 唯一')
+
+  ok(!createCommand('fly', {}).ok, '指令：未知类型被拒绝')
+  ok(!createCommand('act', { action: 'dance' }).ok, '指令：未知动作被拒绝')
+  ok(!createCommand('move', { targetX: 150 }).ok, '指令：越界目标被拒绝')
+  ok(!createCommand('move', { targetX: -5 }).ok, '指令：负目标被拒绝')
+  r = createCommand('move', { targetX: '50' }, { priority: 99, source: 'alien' })
+  ok(r.ok && r.command.targetX === 50 && r.command.priority === 20 && r.command.source === 'system', '指令：targetX 数值化/优先级钳制/未知来源归 system')
+
+  // 总线
+  const dispatched = []
+  const bus = createCommandBus({ onDispatch: (cmd) => (cmd.type === 'move' ? { ok: false, reason: '测试拒绝' } : { ok: true }) })
+  let notified = 0
+  const un = bus.subscribe(() => notified++)
+  const s1 = bus.send('act', { action: 'eat' }, { source: 'user' })
+  ok(s1.ok === true, '总线：合法指令派发成功')
+  const s2 = bus.send('move', { targetX: 30 })
+  ok(s2.ok === false, '总线：onDispatch 否决传导')
+  const s3 = bus.send('fly', {})
+  ok(s3.ok === false, '总线：非法构造不入派发')
+  ok(bus.history().length === 3, '总线：历史含非法构造共 3 条')
+  ok(bus.history().every((h) => typeof h.accepted === 'boolean'), '总线：历史记录含接受标记')
+  ok(bus.droppedCount() === 2, '总线：仅被拒指令计入 dropped')
+  ok(notified === 3, '总线：订阅收到全部历史事件')
+  un()
+  bus.send('act', { action: 'idle' })
+  ok(notified === 3, '总线：退订后不再通知')
+  ok(bus.recent(1)[0].action === 'idle', '总线：recent 取尾部')
+
+  // 行为→动作映射完备
+  ok(Object.keys(BEHAVIOR_TO_ACTION).length === 7, '指令：七个行为全部有动作映射')
+  ok(COMMAND_ACTIONS.includes('dead') && COMMAND_ACTIONS.includes('shiver'), '指令：关键动作在白名单')
+  ok(PRIORITIES.ambient === 0 && PRIORITIES.user === 10 && PRIORITIES.critical === 20, '指令：优先级常量')
+}
+
+// ---------- 13. 动作系统：状态机 / 锚点接近 / 门禁 ----------
+{
+  const { createActionSystem, ACTION_EVENT, ACTIONS, ACTION_LABEL } =
+    await import('../src/games/tiantian-dianchong/core/actionSystem.js')
+
+  let nowMs = 1000
+  const events = []
+  const mk = (anchors = { food: 64, bed: 28 }) =>
+    createActionSystem({
+      anchors: () => anchors,
+      onEvent: (ev) => events.push(ev),
+      now: () => nowMs
+    })
+
+  // 初始态
+  let sys = mk()
+  let snap = sys.snapshot()
+  ok(snap.action === 'idle' && snap.anim === 'idle' && snap.loop === true, '动作：初始为 idle 循环')
+
+  // wander → MOVE 事件 → arrived → 回落 idle
+  events.length = 0
+  const verdict = sys.handleCommand({ id: 'c1', type: 'act', action: 'wander', priority: 0 })
+  ok(verdict.ok, '动作：wander 指令接受')
+  const moveEv = events.find((e) => e.type === ACTION_EVENT.MOVE)
+  ok(moveEv && moveEv.targetX >= 0 && moveEv.targetX <= 100 && moveEv.anim === 'walk', '动作：wander 产生 MOVE 事件（walk 动画）')
+  ok(sys.snapshot().phase === 'moving', '动作：wander 进入移动阶段')
+  sys.updatePosition(moveEv.targetX, 1)
+  sys.arrived()
+  ok(sys.snapshot().action === 'idle', '动作：踱步到达后回落 idle')
+
+  // 锚点接近：eat 先走向食盆
+  events.length = 0
+  sys = mk()
+  sys.handleCommand({ id: 'c2', type: 'act', action: 'eat', priority: 10 })
+  let s2 = sys.snapshot()
+  ok(s2.phase === 'moving' && Math.abs(s2.targetX - 64) < 0.01, '动作：eat 先走向食盆锚点')
+  sys.updatePosition(64, 1)
+  sys.arrived()
+  s2 = sys.snapshot()
+  ok(s2.action === 'eat' && s2.phase === 'acting' && s2.anim === 'eat' && s2.loop === false, '动作：就位后进入 eat 演出')
+  const startEv = events.find((e) => e.type === ACTION_EVENT.START && e.action === 'eat')
+  ok(!!startEv, '动作：eat 触发 START 生命周期事件')
+  // 限时结束 → idle
+  nowMs += ACTIONS.eat.duration * 1000 + 10
+  sys.tick()
+  ok(sys.snapshot().action === 'idle', '动作：eat 时长结束回落 idle')
+
+  // 无锚点场景：eat 原地执行
+  sys = mk({})
+  sys.handleCommand({ id: 'c3', type: 'act', action: 'eat', priority: 10 })
+  ok(sys.snapshot().phase === 'acting', '动作：无锚点时原地进食')
+
+  // 睡眠门禁
+  sys = mk()
+  sys.handleCommand({ id: 'c4', type: 'act', action: 'sleep', priority: 5 })
+  sys.updatePosition(28, 1)
+  sys.arrived()
+  ok(sys.snapshot().action === 'sleep' && sys.snapshot().posture === 'sleep', '动作：入睡进入睡眠体态')
+  ok(sys.handleCommand({ id: 'c5', type: 'act', action: 'play', priority: 0 }).ok === false, '动作：睡眠中 ambient 行为被拒')
+  ok(sys.handleCommand({ id: 'c6', type: 'move', targetX: 80, priority: 0 }).ok === false, '动作：睡眠中移动被拒')
+  ok(sys.handleCommand({ id: 'c7', type: 'act', action: 'wake', priority: 0 }).ok === true, '动作：wake 可唤醒')
+  nowMs += ACTIONS.wake.duration * 1000 + 10
+  sys.tick()
+  ok(sys.snapshot().action === 'idle', '动作：醒后回 idle')
+
+  // 用户优先级可打断睡眠
+  sys = mk()
+  sys.handleCommand({ id: 'c8', type: 'act', action: 'sleep', priority: 5 })
+  sys.updatePosition(28, 1)
+  sys.arrived()
+  ok(sys.handleCommand({ id: 'c9', type: 'act', action: 'play', priority: 10 }).ok === true, '动作：用户指令可打断睡眠')
+  ok(sys.snapshot().action === 'play', '动作：打断后进入 play')
+
+  // 死亡终极状态
+  sys = mk()
+  sys.handleCommand({ id: 'd1', type: 'act', action: 'dead', priority: 20 })
+  ok(sys.snapshot().gone === true, '动作：死亡进入 gone 体态')
+  ok(sys.handleCommand({ id: 'd2', type: 'act', action: 'play', priority: 10 }).ok === false, '动作：死亡后用户动作被拒')
+  ok(sys.handleCommand({ id: 'd3', type: 'act', action: 'dead', priority: 20 }).ok === true, '动作：dead 幂等')
+
+  // 忙碌时 ambient 丢弃
+  sys = mk({})
+  sys.handleCommand({ id: 'b1', type: 'act', action: 'beg', priority: 10 })
+  ok(sys.handleCommand({ id: 'b2', type: 'act', action: 'wander', priority: 0 }).ok === false, '动作：限时动作忙碌中丢弃 ambient')
+  ok(sys.handleCommand({ id: 'b3', type: 'act', action: 'groom', priority: 10 }).ok === true, '动作：用户指令可打断忙碌')
+
+  // 昏迷保护
+  sys = mk()
+  sys.handleCommand({ id: 'k1', type: 'act', action: 'coma', priority: 20 })
+  ok(sys.handleCommand({ id: 'k2', type: 'act', action: 'happy', priority: 10 }).ok === false, '动作：危急昏迷保护（低于 critical 被拒）')
+
+  // wanderTarget 确定性
+  sys = mk()
+  const t1 = sys.wanderTarget(() => 0.5)
+  ok(t1 === sys.wanderTarget(() => 0.5) && t1 >= 12 && t1 <= 88, '动作：wanderTarget 注入 rng 确定性')
+  ok(Object.keys(ACTIONS).length >= 17 && !!ACTION_LABEL.eat, '动作：动作注册表 ≥17 且含中文标签')
+}
+
+// ---------- 14. 生命驱动：状态→指令的独立内在逻辑 ----------
+{
+  const { createLifeRuntime } = await import('../src/games/tiantian-dianchong/core/lifeRuntime.js')
+  const { createCommandBus } = await import('../src/games/tiantian-dianchong/core/commands.js')
+
+  const setup = (saveObj, decide) => {
+    const sent = []
+    const says = []
+    const allEvents = []
+    const bus = createCommandBus({ onDispatch: (cmd) => { sent.push(cmd); return { ok: true } } })
+    const rt = createLifeRuntime({
+      getSave: () => saveObj,
+      getSpecies: () => getSpecies(saveObj.pet.speciesId, saveObj.customSpecies),
+      bus,
+      decide,
+      onEvents: (evts) => allEvents.push(...evts),
+      onSay: (say, ai) => says.push({ say, ai }),
+      now: () => saveObj.gameClock
+    })
+    return { rt, sent, says, allEvents }
+  }
+
+  // bootstrap：清醒 → idle
+  let s = makeSave('cat')
+  s.gameClock = 8 * HOUR // 早上 8 点清醒
+  let h = setup(s, async () => null)
+  h.rt.bootstrap()
+  ok(h.sent.at(-1)?.action === 'idle', '驱动：清醒载入派发 idle')
+
+  // bootstrap：作息睡眠 → sleep
+  s = makeSave('cat')
+  s.gameClock = 14 * HOUR // 猫午后小憩
+  h = setup(s, async () => null)
+  h.rt.bootstrap()
+  ok(h.sent.at(-1)?.action === 'sleep' && h.sent.at(-1)?.priority === 5, '驱动：睡眠时段载入派发 routine sleep')
+
+  // bootstrap：昏迷 → coma（critical）
+  s = makeSave('cat')
+  s.pet.coma = true
+  h = setup(s, async () => null)
+  h.rt.bootstrap()
+  ok(h.sent.at(-1)?.action === 'coma' && h.sent.at(-1)?.priority === 20, '驱动：昏迷载入派发 critical coma')
+
+  // bootstrap：死亡 → dead
+  s = makeSave('cat')
+  s.pet.dead = true
+  h = setup(s, async () => null)
+  h.rt.bootstrap()
+  ok(h.sent.at(-1)?.action === 'dead', '驱动：死亡载入派发 dead')
+
+  // decideOnce：行为→指令 + 心声
+  s = makeSave('cat')
+  s.gameClock = 8 * HOUR
+  h = setup(s, async () => ({ behavior: 'wander', say: '溜达溜达', source: 'random' }))
+  await h.rt.decideOnce()
+  ok(h.sent.some((c) => c.action === 'wander' && c.source === 'life'), '驱动：行为决策派发 life 指令')
+  ok(h.says.length === 1 && h.says[0].say === '溜达溜达', '驱动：心声回调触发')
+
+  // decideOnce：心情低落 → sad 身体语言
+  s = makeSave('cat')
+  s.gameClock = 8 * HOUR
+  s.pet.mood = 12
+  h = setup(s, async () => ({ behavior: 'idle', say: '……', source: 'random' }))
+  await h.rt.decideOnce()
+  ok(h.sent.some((c) => c.action === 'sad'), '驱动：心情低落派发 sad 姿态指令')
+
+  // decideOnce：睡眠行为不派发（交给生理监视）
+  s = makeSave('cat')
+  s.gameClock = 8 * HOUR
+  h = setup(s, async () => ({ behavior: 'sleep', say: 'Zzz', source: 'random' }))
+  await h.rt.decideOnce()
+  ok(!h.sent.some((c) => c.action === 'sleep'), '驱动：清醒时 sleep 行为不直接派发')
+
+  // pump：昏迷事件 → coma 指令（且不重复）
+  s = makeSave('cat')
+  s.gameClock = 8 * HOUR
+  s.pet.health = 0.1
+  s.pet.hunger = 5 // 恶劣状态：健康持续恶化而非自愈
+  s.pet.hygiene = 5
+  s.lastSeen = s.gameClock - 2 * HOUR
+  h = setup(s, async () => null)
+  h.rt.pump()
+  ok(h.allEvents.some((e) => e.kind === 'coma'), '驱动：健康耗尽产生昏迷事件')
+  ok(h.sent.filter((c) => c.action === 'coma').length === 1, '驱动：昏迷指令只派发一次')
+  h.rt.pump()
+  ok(h.sent.filter((c) => c.action === 'coma').length === 1, '驱动：持续昏迷不重复派发')
+
+  // pump：睡醒边界 → wake 指令
+  s = makeSave('cat')
+  s.gameClock = 5 * HOUR // 凌晨 5 点（猫夜睡 23-6）
+  s.lastSeen = 5 * HOUR
+  h = setup(s, async () => null)
+  h.rt.bootstrap() // 5 点载入 → 睡眠
+  ok(h.sent.at(-1)?.action === 'sleep', '驱动：凌晨载入为睡眠')
+  s.gameClock = 6 * HOUR + 30 * 60 * 1000 // 6:30 已醒
+  s.lastSeen = 6 * HOUR + 29 * 60 * 1000
+  h.rt.pump()
+  ok(h.sent.some((c) => c.action === 'wake'), '驱动：跨过睡醒边界派发 wake')
+
+  // 病中寒颤（注入随机源概率 1）
+  s = makeSave('cat')
+  s.gameClock = 8 * HOUR
+  s.pet.illness = { id: 'cold', name: '小感冒', since: 0 }
+  h = setup(s, async () => null)
+  const origRandom = Math.random
+  Math.random = () => 0.01
+  h.rt.watchPhysiology()
+  Math.random = origRandom
+  ok(h.sent.some((c) => c.action === 'shiver'), '驱动：病中随机寒颤指令')
+}
+
+// ---------- 15. 交互系统：交互器中枢与用户操作 ----------
+{
+  const { createInteractionSystem } = await import('../src/games/tiantian-dianchong/core/interactions.js')
+  const { createCommandBus } = await import('../src/games/tiantian-dianchong/core/commands.js')
+
+  const captured = []
+  const bus = createCommandBus({ onDispatch: (cmd) => { captured.push(cmd); return { ok: true } } })
+  let s = makeSave('cat')
+  s.settings.sceneId = 'living-room'
+  s.gameClock = 8 * HOUR
+  const results = []
+  const sys = createInteractionSystem({
+    bus,
+    getSave: () => s,
+    getSpecies: () => getSpecies('cat'),
+    onResult: (r) => results.push(r)
+  })
+
+  // 交互器注册齐全
+  const ids = sys.interactors().map((i) => i.id)
+  ok(['user', 'scene', 'prop', 'pet'].every((id) => ids.includes(id)), '交互：四类交互器就绪')
+
+  // 场景锚点：客厅有食盆无床
+  let anchors = sys.scene.anchors()
+  ok(anchors.food === 64 && anchors.bed === undefined, '交互：客厅锚点只有食盆(64)')
+  s.settings.sceneId = 'bedroom'
+  anchors = sys.scene.anchors()
+  ok(anchors.bed === 28, '交互：卧室提供床铺锚点(28)')
+
+  // 用户操作：效果 + 指令 + 结果回调
+  s.settings.sceneId = 'living-room'
+  const before = s.pet.hunger
+  const r = sys.user.request('feed')
+  captured.length = 0
+  ok(r.ok && s.pet.hunger > before, '交互：喂食结算生效')
+  ok(results.length === 1 && results[0].actionId === 'feed', '交互：操作结果回调触发')
+  const r2 = sys.user.request('feed')
+  ok(!r2.ok && captured.length === 0, '交互：冷却期内不再派发指令')
+
+  // 摸头：mood + 指令
+  const moodBefore = s.pet.mood
+  captured.length = 0
+  const pt = sys.user.petTouch()
+  ok(pt.ok && s.pet.mood === moodBefore + 2 && captured.some((c) => c.action === 'pet'), '交互：摸头产生 pet 指令与心情增益')
+
+  // 道具交互器预留
+  ok(sys.prop.use().ok === false, '交互：道具交互器为预留占位')
+
+  // 宠物交互器：单宠物拒绝
+  const pi = sys.pet.interact(s.pet, s.pet, 'greet')
+  ok(!pi.ok && /同伴/.test(pi.message), '交互：单宠物无法与同伴互动')
+}
+
+// ---------- 16. 骨骼动画资产：部件图集与 Spine 骨架（真实运行时解析） ----------
+{
+  const spine = await import('@esotericsoftware/spine-webgl')
+  const { buildPetParts } = await import('../src/games/tiantian-dianchong/spine/parts.js')
+  const { buildPetSkeleton, RIG_BONES } = await import('../src/games/tiantian-dianchong/spine/skeletonFactory.js')
+  const { ANIMATION_NAMES } = await import('../src/games/tiantian-dianchong/spine/animations.js')
+
+  // 四内置物种 + 两个 AI 风格自定义物种
+  const customLook = clampSpecies({
+    id: 'fire-fox', name: '火狐狸', look: { body: '#FF8C42', belly: '#FFE3C2', accent: '#D9552B', ear: 'pointed', tail: 'wag', snout: 'dog', extra: 'collar' }
+  })
+  const customLook2 = clampSpecies({
+    id: 'cloud-lamb', name: '云朵羊', look: { body: '#CFE4F5', belly: '#F4FAFF', accent: '#8FB6D9', ear: 'floppy', tail: 'curly', snout: 'pig', extra: 'whiskers' }
+  })
+  const all = [...speciesList(), customLook, customLook2]
+
+  for (const sp of all) {
+    const parts = buildPetParts(sp)
+    // atlas 文本可被真实运行时解析
+    const atlas = new spine.TextureAtlas(parts.atlasText)
+    ok(atlas.regions.length >= 26, `图集(${sp.name})：区域数 ≥26（实际 ${atlas.regions.length}）`)
+    ok(atlas.pages[0].width === 1024 && parts.pageName.includes(sp.id), `图集(${sp.name})：页面尺寸与命名正确`)
+    ok(atlas.pages[0].pma === false, `图集(${sp.name})：直通 alpha 标记`)
+    atlas.pages[0].setTexture(new spine.FakeTexture())
+
+    // 骨架 JSON 可被真实运行时解析（隐含校验：骨骼引用/插槽/附件区域存在）
+    const loader = new spine.AtlasAttachmentLoader(atlas)
+    const reader = new spine.SkeletonJson(loader)
+    let data = null
+    let parseErr = null
+    try {
+      data = reader.readSkeletonData(buildPetSkeleton(sp).json)
+    } catch (e) {
+      parseErr = e
+    }
+    ok(!parseErr, `骨架(${sp.name})：真实 Spine 运行时解析通过${parseErr ? ' — ' + parseErr.message : ''}`)
+    if (!data) continue
+    ok(data.bones.length === RIG_BONES.length, `骨架(${sp.name})：骨骼数 ${data.bones.length}`)
+    ok(data.slots.length >= 19, `骨架(${sp.name})：插槽数 ${data.slots.length}`)
+    for (const name of ANIMATION_NAMES) {
+      ok(data.findAnimation(name) != null, `骨架(${sp.name})：动画「${name}」存在`)
+    }
+
+    // 动画状态机可驱动全部动画并完成世界变换
+    const skeleton = new spine.Skeleton(data)
+    const state = new spine.AnimationState(new spine.AnimationStateData(data))
+    let animErr = null
+    try {
+      for (const anim of data.animations) {
+        state.setAnimation(0, anim.name, true)
+        state.update(0.5)
+        state.apply(skeleton)
+        skeleton.updateWorldTransform(spine.Physics.update)
+      }
+    } catch (e) {
+      animErr = e
+    }
+    ok(!animErr, `动画(${sp.name})：全部动画可驱动世界变换${animErr ? ' — ' + animErr.message : ''}`)
+    ok(Number.isFinite(skeleton.x) && skeleton.bones.length > 0, `动画(${sp.name})：世界变换数值健康`)
+  }
+
+  // 物种特质 → 动画风格差异（呼吸幅度/尾巴摆幅）
+  const cat = getSpecies('cat')
+  const dino = getSpecies('dino-monster')
+  const catIdle = buildPetSkeleton(cat).json.animations.idle.bones.body.scale
+  const dinoIdle = buildPetSkeleton(dino).json.animations.idle.bones.body.scale
+  const catBreath = catIdle[1].y - 1
+  const dinoBreath = dinoIdle[1].y - 1
+  ok(dinoBreath > catBreath, '动画：恐龙(代谢1.5)呼吸幅度大于猫咪(0.8)')
+  const catWag = Math.abs(buildPetSkeleton(cat).json.animations.idle.bones['tail-1'].rotate[1].angle)
+  const dinoWag = Math.abs(buildPetSkeleton(dino).json.animations.idle.bones['tail-1'].rotate[1].angle)
+  ok(dinoWag > catWag, '动画：恐龙(情绪1.5)摆尾幅度大于猫咪(1.15)')
+
+  // 循环动画首尾关键帧对齐（无缝循环）
+  const pigIdle = buildPetSkeleton(getSpecies('pig')).json.animations.idle
+  ok(pigIdle.bones.body.scale.at(-1).y === pigIdle.bones.body.scale[0].y, '动画：循环动画首尾对齐')
+
+  // 卷尾物种：tail-2 插槽无默认附件（不可见骨骼仍可被动画驱动）
+  const pig = getSpecies('pig')
+  const pigJson = buildPetSkeleton(pig).json
+  const tail2Slot = pigJson.slots.find((sl) => sl.name === 'tail-2')
+  ok(!tail2Slot.attachment, '骨架：卷尾物种尾梢插槽默认无附件')
+  ok('tail-2' in pigJson.animations.walk.bones, '骨架：卷尾物种尾梢骨骼仍受动画驱动')
+}
+
+console.log(`\n全部 ${passed} 项断言通过 ✅`)

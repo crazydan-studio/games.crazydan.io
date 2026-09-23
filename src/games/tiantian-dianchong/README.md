@@ -21,11 +21,47 @@
 领养（选物种 + 取名）→ 日常照料（喂食/玩耍/清洁/治疗/哄睡）
   ↕ 时间流逝（现实同步 或 加速）
 宠物状态演变（饥饿↓ 心情↓ 清洁↓ 生病 成长↑）
-  ↕ 生命系统驱动自发行为与「心声」气泡（随机 / AI）
+  ↕ 生命系统自发决策与「心声」气泡（随机 / AI）
+  ↕ 一切以「指令」汇入动作系统 → 骨骼动画实时呈现状态与动作
 事件日志 ← 离线结算（回来时补算离开的时光）→ 存档导出/导入
 ```
 
 ## 3. 系统设计
+
+### 3.0 三层指令驱动架构（总览）
+
+整个游戏按「**生命系统 + 交互系统 → 指令 → 动作系统 → 骨骼动画**」的流水线组织：
+
+```
+┌─ 生命系统（内在驱动） ─┐   ┌─ 交互系统（外界入口） ─┐
+│ core/life.js 状态演化  │   │ user  玩家六大操作 + 摸头 │
+│ core/lifeRuntime.js   │   │ scene 场景锚点（预留扩展） │
+│  · 生理节律（作息入睡/醒来）│ │ prop  道具（预留）      │
+│  · 生死事件（昏迷/死亡）   │ │ pet   多宠物交互（预留） │
+│  · 双系统行为决策（随机/AI）│ └──────────┬───────────┘
+└──────────┬─────────────┘              │
+           │      PetCommand 指令        │
+           └──────────┬──────────────────┘
+                      ▼
+          core/commands.js 指令总线（校验 + 审计历史）
+                      ▼
+          core/actionSystem.js 动作系统（身体层）
+          · 17 种动作注册表（动画/时长/锚点/体态）
+          · 优先级门禁：危急 > 玩家 > 生理节律 > 自发
+          · 锚点接近：先走向食盆/床铺再执行
+                      ▼
+          spine/SpinePetPlayer.js 骨骼动画渲染（spine-webgl）
+          · WebGL 不可用 → 自动降级 SVG 宠物（PetAvatar）
+```
+
+**指令协议**（`core/commands.js`）：`{ id, type: 'act'|'move', action|targetX, source, priority, reason }`；
+优先级 `0 ambient（自发行为）/ 5 routine（生理节律）/ 10 user（玩家交互）/ 20 critical（生死攸关）`；
+来源白名单 `life / user / scene / prop / pet / system`——为未来的场景事件与道具指令预留同一条通路。
+总线本身不做调度决策，只校验合法性、派发给动作系统、留最近 40 条审计历史（调试与 E2E 用）。
+
+**解耦约束**：生命系统不认识动作系统与渲染层（只发指令）；交互系统只做校验与状态结算（不操纵身体）；
+动作系统是纯逻辑（无 DOM，Node 可单测），位置与时间由渲染层喂回（`updatePosition / arrived / tick`）。
+三个系统全部可独立运行：关掉渲染层，生命照常演化；关掉生命系统，玩家指令照常驱动身体。
 
 ### 3.1 时间系统（core/time.js）
 
@@ -53,7 +89,7 @@
 - **生病**：每游戏小时以 `p = 0.004 × illnessRate × (1 + 饥饿风险 + 脏乱风险)` 掷骰（风险 = 状态 <25 时 +1.5）；病中健康流失加倍，需「喂药」治疗
 - **死亡（可选，默认禁用）**：开启后 health ≤ 0 → 宠物死亡，进入告别与纪念界面；**默认禁用时 health 触底只会陷入「虚弱昏迷（coma）」**——所有衰减 ×0.3、健康缓慢自愈，照料即可苏醒，绝不离开。设计动机：避免玩家因害怕失去而沉迷值守，鼓励「随时回来看看」而非「必须时刻在线」
 - 事件聚合：状态跨越关键阈值（饿了 <25 / 危急 <5）、生病、康复、成长阶段跨越、昏迷/死亡等各产生一条日志事件（同一阈值冷却 8 游戏小时防刷屏）
-- **宠物间交互接口（core/interactions.js，预留）**：`registerPetInteraction(type, handler)` / `runPetInteraction(actor, target, type)` 交互总线 + 内置 `greet / playTogether / shareFood` 三个演示 handler；当前单宠物不激活，多宠物开放后直接接线（见 §3.8）
+- **生命系统运行时（core/lifeRuntime.js）**：把「宠物自己的意志」从 UI 编排中剥离——时间引擎泵（每秒推进 + 生理监视）、行为决策循环（问询双生命系统）、载入对齐（bootstrap 按当前状态发出初始指令）。生理状态变化直接转为指令：作息到点 → `sleep/wake`（routine 优先级）、健康耗尽 → `coma`（critical）、生命终止 → `dead`、病中偶发 `shiver` 寒颤、心情低落 → `sad` 身体语言。生命系统从不直接操纵渲染
 
 ### 3.3 物种系统（core/species.js）
 
@@ -78,7 +114,7 @@
 
 ### 3.4 行为与双生命系统
 
-宠物有 7 种自发行为：`idle 安静待着`、`wander 踱步闲逛`、`sleep 睡觉`、`play 自己玩耍`、`beg 向你撒娇讨要`、`groom 梳洗自己`、`stare 发呆盯着你`。行为引擎统一走 `LifeSystem.decide(petSnapshot) → { behavior, say }` 接口：
+宠物有 7 种自发行为：`idle 安静待着`、`wander 踱步闲逛`、`sleep 睡觉`、`play 自己玩耍`、`beg 向你撒娇讨要`、`groom 梳洗自己`、`stare 发呆盯着你`（白名单见 `core/behaviors.js`）。行为引擎统一走 `decide(petSnapshot) → { behavior, say }` 接口，由 `lifeRuntime.decideOnce()` 每 6–14 秒调起，结果经 `BEHAVIOR_TO_ACTION` 映射后以 **ambient 优先级指令**汇入总线（自然入睡除外——交给生理监视，避免与 routine 优先级打架）：
 
 | | 随机生命系统（core/randomLife.js，默认） | AI 智能体生命系统（core/ai/life.js） |
 | --- | --- | --- |
@@ -93,7 +129,7 @@
 - **预留 AI 动态生成**：`generateSceneByAi()`（core/ai/scene.js）按场景 Schema（渐变色 + ≤8 个白名单装饰件：云/树/花/蝴蝶/月/星/城市剪影/栅栏/球/食盆/灯/窗/地毯/床/沙发）调用大模型生成新场景，存入本地场景库随存档导出
 - 架构按 `sceneId → registry` 解析，内置与自定义同权；单宠物单场景渲染，多场景切换即换 `sceneId`
 
-### 3.6 玩家操作（core/actions.js）
+### 3.6 玩家操作与交互系统（core/actions.js + core/interactions.js）
 
 | 操作 | 效果 | 冷却（游戏小时） |
 | --- | --- | --- |
@@ -105,6 +141,17 @@
 | 哄睡 | 立即进入 2 游戏小时的睡眠 | 0.5 |
 
 昏迷中的宠物：喂食/喂药可加速唤醒。全部操作即时写日志并持久化。
+
+**交互系统（core/interactions.js）**以「交互器 (Interactor)」为统一抽象，是宠物与外界一切互动的入口：
+
+| 交互器 | 现状 | 预留扩展 |
+| --- | --- | --- |
+| `user` | 六大照料操作（校验 + 结算后派发 user 优先级指令）与摸头彩蛋 | 新的玩家手势 |
+| `scene` | **场景锚点**：从场景 props 提取食盆/床铺位置（0-1 → 舞台 0-100），动作系统据此决定「先走到哪再执行」 | 场景氛围影响心情、昼夜事件指令 |
+| `prop` | 接口预留（`use()` 当前拒绝） | 玩具球/逗猫棒/食物碗点击 → 指令 |
+| `pet` | 包装既有宠物间交互总线（greet/playTogether/shareFood） | 多宠物开放后直接接线 |
+
+交互器约定：`request(...)` 负责校验与状态结算，然后把「身体该做什么」抽象成指令发给总线——交互系统从不直接操纵动作或渲染。
 
 ### 3.7 持久化与导入导出（core/storage.js）
 
@@ -118,8 +165,23 @@
 当前 store 以单 `pet` 字段为根，但：
 
 - 物种解析已走注册表（内置 + 自定义同权），新增物种零改动
-- `core/interactions.js` 交互总线已就绪：多宠物时 store 扩展为 `pets[]`，舞台按位置渲染多只，交互 UI 调 `runPetInteraction(actor, target, type)` 即通
+- 交互系统已就绪（§3.6）：多宠物时 store 扩展为 `pets[]`，舞台按位置渲染多只，UI 调 `interactions.pet.interact(actor, target, type)` 即通（内部复用 `registerPetInteraction` 总线）
 - 场景 `sceneId` 独立字段，切换 = 改字段；AI 生成场景已在 §3.5 预留
+
+### 3.9 骨骼动画渲染层（spine/，基于 spine-runtimes）
+
+宠物状态与动作由 **Spine 2D 骨骼动画**实时呈现（运行时 [spine-webgl](https://github.com/EsotericSoftware/spine-runtimes) 4.3，npm 依赖 `@esotericsoftware/spine-webgl`）。与常规「导入 .json/.atlas/.png 资产」不同，本作的骨架与贴图**全部在运行时程序化生成**——零外部资产文件，AI 生成的新物种领养即刻拥有骨骼动画：
+
+| 模块 | 职责 |
+| --- | --- |
+| spine/parts.js | 部件图集：按物种 `look`（配色/耳型/尾型/鼻吻/附加件）Canvas2D 绘制全部身体部件到一张离屏画布，并产出 Spine atlas 文本（直通 alpha，上传时预乘） |
+| spine/skeletonFactory.js | 骨架工厂：13 骨骼 / 20 插槽的正面 Q 版装配（root→body→四肢/尾/head→耳/眼），耳型差异单独参数化；表情（眼/嘴/腮红/眉）靠附件换装 |
+| spine/animations.js | 动画库：17 个参数化动画时间线（idle/walk/eat/sleep/wake/beg/play/groom/stare/wash/medicine/pet/happy/sad/shiver/coma/dead），**物种特质直接写进动画风格**——代谢→呼吸幅度、情绪波动→摆尾幅度、合群度→弹跳高度 |
+| spine/SpinePetPlayer.js | WebGL 渲染器：rAF 循环 → AnimationState → 世界变换 → SceneRenderer；舞台 0-100 抽象坐标 → 画布像素、朝向翻转、到达回报；成长阶段缩放 / 长寿白眉 / 病中眩晕眼的程序化覆盖；`window.__spineDebug` 调试钩子 |
+
+- **渲染管线**：透明画布叠在场景 SVG 之上 → `ManagedWebGLRenderingContext(premultipliedAlpha)` → GLTexture 预乘上传 → PMA 混合（ONE, ONE_MINUS_SRC_ALPHA）；相机为正交投影，画布中心对齐、随 ResizeObserver 自适应
+- **降级链路**：WebGL 初始化失败（极端环境）→ `spineMode = false` → 模板渲染参数化 SVG 宠物（PetAvatar，v1 同源造型），玩法完全不受影响
+- **指令→动画接线**（App.vue）：动作系统生命周期事件 `action:start/end` → `player.play(anim, loop)`；`move:to` → 走行动画 + `moveTo(targetX)`；渲染层每帧回报位置与到达 → `updatePosition/arrived`，位置与动作状态双向同步
 
 ## 4. AI 集成设计
 
@@ -160,8 +222,8 @@
 
 ## 5. UI 与视觉
 
-- 造型隐喻「**电子宠物机**」：上半是圆角「屏幕」（场景 + 宠物 + 心声气泡），下半是实体感按键区（六个操作按钮），移动端单手可握
-- 参数化 SVG 宠物（PetAvatar.vue）：`look` 驱动外形（耳/尾/鼻吻/附加件），`mood/illness/stage` 驱动表情与体型，行为驱动 CSS 动画（呼吸/踱步/蜷睡/蹦跳/撒娇/梳洗/发呆眨眼）
+- 造型隐喻「**电子宠物机**」：上半是圆角「屏幕」（场景 + 骨骼动画画布 + 心声气泡），下半是实体感按键区（六个操作按钮），移动端单手可握
+- **骨骼动画舞台（PetStage.vue + spine/）**：WebGL 画布常驻叠加在场景 SVG 之上，WebGL 不可用时自动降级为参数化 SVG 宠物（PetAvatar.vue，v1 同源造型，玩法不变）
 - 延续本站手绘暖感，但主色切换为「电光青绿」（`--primary: #26B99A`，底色薄荷奶油），与消消乐形成姊妹感
 - 领养页：四物种卡片（造型预览 + 特性摘要 + 性格标签）→ 取名（≤8 字）→ 开局
 - 状态条 + 事件日志 + 设置弹窗（时间流速 / 生死开关（默认关，开启需二次确认）/ 生命系统切换 / AI 配置 / 场景切换 / 导入导出 / 重新领养）
@@ -174,22 +236,31 @@ src/games/tiantian-dianchong/
 ├── index.html                  # 入口页（nl-hud 预置 + PWA meta）
 ├── main.js                     # Vue 挂载 + SW 注册
 ├── style.css                   # 游戏设计系统
-├── App.vue                     # 编排：领养页 / 主界面 / 设置 / 生命循环
-├── components/                 # AdoptScreen / PetStage / PetAvatar / SceneBackdrop /
-│                               # StatusPanel / ActionBar / LogPanel / SettingsModal /
-│                               # AiAuditPanel（AI 调用记录调试面板）
+├── App.vue                     # 编排：领养页 / 主界面 / 设置 / 三层系统接线
+├── components/                 # AdoptScreen / PetStage（骨骼动画舞台）/ PetAvatar（SVG 降级）/
+│                               # SceneBackdrop / StatusPanel / ActionBar / LogPanel /
+│                               # SettingsModal / AiAuditPanel（AI 调用记录调试面板）
 ├── core/                       # 纯逻辑（无 Vue 依赖，Node 可直接单测）
 │   ├── time.js  species.js  life.js  behaviors.js  randomLife.js
-│   ├── actions.js  storage.js  scenes.js  interactions.js
+│   ├── commands.js             # 指令协议 + 指令总线（校验/派发/审计历史）
+│   ├── actionSystem.js         # 动作系统：17 动作注册表 + 优先级门禁 + 锚点接近
+│   ├── lifeRuntime.js          # 生命系统运行时：时间泵 + 生理监视 + 行为决策循环
+│   ├── actions.js  storage.js  scenes.js  interactions.js（交互系统）
 │   └── ai/                     # provider.js  life.js  species.js  scene.js  audit.js
+├── spine/                      # 骨骼动画层（spine-webgl 4.3）
+│   ├── parts.js                # 运行时部件图集（Canvas2D → atlas 文本）
+│   ├── skeletonFactory.js      # 骨架工厂（13 骨骼 / 20 插槽 / 表情附件）
+│   ├── animations.js           # 17 个参数化动画时间线（物种特质驱动）
+│   └── SpinePetPlayer.js       # WebGL 渲染器 + 舞台移动 + 环境态覆盖
 └── README.md                   # 本设计文档
 public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
 ```
 
 ## 7. 测试
 
-- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**130 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 不足 1 小时的零头折算（不误跳整小时）/ 随机生命系统确定性与状态修正 / 存档导入导出回环与脏数据清洗 / AI JSON 解析、端点兼容、超时中止、行为白名单降级 / AI 物种与场景钳制 / 宠物间交互总线 / AI 调用审计（四类分类入档、完整提示词、去向标注、密钥掩码、FIFO 上限、分类清空、导出、类型扩展、订阅、截断）
+- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**352 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 不足 1 小时的零头折算（不误跳整小时）/ 随机生命系统确定性与状态修正 / 存档导入导出回环与脏数据清洗 / AI JSON 解析、端点兼容、超时中止、行为白名单降级 / AI 物种与场景钳制 / 宠物间交互总线 / AI 调用审计（四类分类入档、完整提示词、去向标注、密钥掩码、FIFO 上限、分类清空、导出、类型扩展、订阅、截断）/ **指令总线（协议校验、优先级钳制、来源白名单、审计历史、非法指令拒绝）** / **动作系统（优先级门禁、睡眠/死亡体态保护、锚点接近、踱步目标、限时回落、幂等续态）** / **生命运行时（生理监视→指令、载入对齐、行为决策派发）** / **交互系统（交互器注册、场景锚点提取、多宠物预留）** / **骨骼资产（四物种图集尺寸与部件齐全、atlas 文本格式、真实 Spine 运行时解析骨架、17 动画全部可驱动世界变换、物种特质→动画风格差异、循环动画首尾对齐、卷尾插槽）**
 - agent-browser E2E（生产构建 + 静态托管）：门户卡片 → 领养四物种 → 领养狗狗「旺财」→ nl-hud 预置 → 1× 时间节奏（15 秒仅微量消耗）→ 喂食（+38 饱食、日志、气泡）→ 玩耍与摸头彩蛋 → 重新领养（confirm + 清档）→ 600× 流速与场景切换 → 导出存档（blob 完整、无密钥）→ 导入回环（改名换场景、历史保留）→ AI 配置保存（cfg/key 分离存储）→ mock LLM 验证 AI 智能体生命系统（chat/completions 调用 + AI 台词气泡）→ SW 注册 → 断网重载完整可玩 → 浏览器回退门户；全程零控制台错误
+- **骨骼动画 E2E（本轮新增）**：领养猫咪→ Spine 骨骼渲染（13 骨骼/20 插槽/17 动画，VLM 视觉审查确认宠物完整可见、贴地无残影）→ 喂食 → **走向食盆（x 50→64）→ 进食动画 → 回落 idle** → 玩耍动画 → 生命系统自发行为（发呆/撒娇）→ 卧室哄睡 → **走向床铺（x 50→28，朝向翻转）→ 入睡** → WebGL 屏蔽 → **SVG 降级宠物正常可玩** → 断网重载 → **骨骼动画与指令总线离线完全可用** → 全程零控制台错误
 
 ## 8. 设计更新记录
 
@@ -197,10 +268,13 @@ public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
 | --- | --- |
 | 2026-09-23 | 初版设计定稿；v1 开发完成：四内置物种 + 随机生命系统 + AI 智能体（行为/物种/场景三入口，OpenAI 兼容）+ 离线结算 + 存档导入导出 + PWA 离线可玩 |
 | 2026-09-23 | **AI 调用审计**：新增 core/ai/audit.js + AiAuditPanel.vue —— 提示词与结果按生成数据类型（行为/物种/场景/连接）分类存放与统一管理；provider.chat 传 task 自动入档，业务方 annotate 结果去向；分类浏览 / 复制 / 导出 / 清理；密钥永不入档且入档文本掩码；registerAiTaskType 可扩展新类型 |
+| 2026-09-23 | **三层指令驱动架构 + Spine 骨骼动画**：新增指令总线（commands.js）、动作系统（actionSystem.js，17 动作/优先级门禁/锚点接近）、生命系统运行时（lifeRuntime.js，生理监视→指令）；interactions.js 升级为交互系统（user/scene/prop/pet 四交互器，场景锚点驱动「先走过去再执行」）；spine/ 全新骨骼动画层——基于 spine-webgl 4.3，部件图集/骨架/动画全部运行时程序化生成（零外部资产，AI 新物种即刻拥有动画），17 个动画由物种特质参数化驱动，WebGL 失败自动降级 SVG 宠物。修复隐形宠物根因（相机 position.set 缺 z 参数致投影矩阵 NaN）与尾巴插槽默认附件缺失 |
 
 ## 9. 路线图（预留，未实现）
 
-- 多宠物同屏与宠物间交互总线接线（`core/interactions.js` 已就绪）
+- 多宠物同屏与宠物间交互接线（交互系统 `interactions.pet` 已就绪）
 - AI 动态生成场景一键入库（`core/ai/scene.js` 已就绪，待 UI 入口）
+- 道具交互器接线（`interactions.prop`，玩具球/逗猫棒 → 指令）
+- Spine 高级特性：路径约束（甩尾弧线）、物理约束（耳朵/尾巴惯性摆动）、变形动画（揉脸夸张表情）
 - 宠物图鉴 / 成长相册 / 老年回忆录
 - 跨设备自动同步（WebDAV / 云盘直连导入导出）

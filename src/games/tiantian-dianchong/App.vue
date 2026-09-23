@@ -1,7 +1,10 @@
 <script setup>
 // ============ 天天电宠 · 应用编排 ============
-// 生命循环（每秒按真实时间差结算）+ 行为循环（随机 / AI 双生命系统）+
-// 持久化（5s 防抖 + 离开页面即存）+ 存档导入导出 + 离线结算摘要 + 死亡纪念。
+// 指令驱动三层架构的接线中枢：
+//   生命系统(lifeRuntime) ─┐
+//   交互系统(interactions) ─┼→ 指令总线(bus) → 动作系统(actionSystem) → 骨骼动画(player)
+//                          │                   └→ SVG 降级（无 WebGL 时）
+// 持久化（5s 防抖 + 离开即存）+ 存档导入导出 + 离线结算摘要 + 死亡纪念。
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import PetStage from './components/PetStage.vue'
 import StatusPanel from './components/StatusPanel.vue'
@@ -13,9 +16,12 @@ import AdoptScreen from './components/AdoptScreen.vue'
 import { advance, offlineSummary, riskLevel, isAsleep, stageOf } from './core/life.js'
 import { decideRandom } from './core/randomLife.js'
 import { decideAi } from './core/ai/life.js'
-import { performAction } from './core/actions.js'
 import { getSpecies } from './core/species.js'
 import { getScene, sceneList } from './core/scenes.js'
+import { createCommandBus } from './core/commands.js'
+import { createActionSystem, ACTION_EVENT } from './core/actionSystem.js'
+import { createLifeRuntime } from './core/lifeRuntime.js'
+import { createInteractionSystem } from './core/interactions.js'
 import {
   loadSave, persistSave, newSave, clearSave, pushLog, exportSave, parseImportedSave,
   loadAiConfig, saveAiConfig, getApiKey, setApiKey, hasApiKey
@@ -25,7 +31,7 @@ import { fmtGameTime, periodNow, dayOf } from './core/time.js'
 // ---- 全局状态 ----
 const save = ref(null)
 const customSpeciesLib = ref({}) // 重新领养时保留已生成物种库
-const currentBehavior = ref('idle')
+const svgBehavior = ref('idle') // SVG 降级模式的行为（骨骼动画模式不使用）
 const bubble = ref(null)
 const toasts = ref([])
 const settingsOpen = ref(false)
@@ -39,9 +45,17 @@ let bubbleTimer = null
 let lifeTimer = null
 let persistTimer = null
 let behaviorTimer = null
+let fallbackTickTimer = null
 let aiFailCount = 0
 let aiCooldownUntil = 0
 let lastTouchAt = 0
+
+// ---- 三层系统实例 ----
+let bus = null
+let actionSystem = null
+let interactions = null
+let lifeRuntime = null
+let player = null // 骨骼动画渲染器（PetStage 就绪后注入）
 
 // ---- 派生视图 ----
 const pet = computed(() => save.value?.pet)
@@ -95,17 +109,96 @@ function setBubble(text, ai = false) {
   }, 3800)
 }
 
-// ---- 生命循环：每秒按真实时间差结算 ----
-function lifeTick() {
-  const s = save.value
-  if (!s) return
-  const events = advance(s, Date.now())
-  if (events.length) handleEvents(events)
-  refreshCooldowns()
+// ============================================================
+// 系统接线：指令总线 → 动作系统 → 渲染（骨骼动画 / SVG 降级）
+// ============================================================
+
+// 动作 → SVG 降级行为（PetAvatar CSS 动画词汇）
+const ACTION_TO_SVG = {
+  idle: 'idle', wander: 'wander', stare: 'stare', beg: 'beg', groom: 'groom',
+  sleep: 'sleep', wake: 'sleep', eat: 'beg', snack: 'beg', play: 'play',
+  bathe: 'groom', medicine: 'beg', pet: 'beg', happy: 'play', sad: 'idle',
+  shiver: 'idle', coma: 'sleep', dead: 'idle'
 }
 
+function handleActionEvent(ev) {
+  if (ev.type === ACTION_EVENT.START) {
+    player?.play(ev.anim, ev.loop)
+    svgBehavior.value = ACTION_TO_SVG[ev.action] || 'idle'
+  } else if (ev.type === ACTION_EVENT.MOVE) {
+    player?.play(ev.anim || 'walk', true)
+    player?.moveTo(ev.targetX)
+    svgBehavior.value = 'wander'
+  } else if (ev.type === ACTION_EVENT.ARRIVED) {
+    actionSystem?.arrived()
+  }
+}
+
+/** 组装三层系统（领养/导入/载入后调用） */
+function setupSystems() {
+  actionSystem = createActionSystem({
+    anchors: () => interactions?.scene.anchors() || {},
+    onEvent: handleActionEvent,
+    now: () => Date.now()
+  })
+  bus = createCommandBus({ onDispatch: (cmd) => actionSystem.handleCommand(cmd) })
+
+  interactions = createInteractionSystem({
+    bus,
+    getSave: () => save.value,
+    getSpecies: () => species.value,
+    onResult: handleUserResult
+  })
+
+  lifeRuntime = createLifeRuntime({
+    getSave: () => save.value,
+    getSpecies: () => species.value,
+    bus,
+    decide: decideBehavior,
+    onEvents: handleEvents,
+    onSay: (say, ai) => setBubble(say, ai)
+  })
+
+  lifeRuntime.bootstrap()
+
+  // E2E / 现场排查调试钩子（只读快照，不影响运行）
+  if (typeof window !== 'undefined') {
+    window.__dcDebug = {
+      anchors: () => interactions?.scene.anchors() || {},
+      action: () => actionSystem?.snapshot() || null,
+      bus: () => (bus ? bus.recent(12) : [])
+    }
+  }
+}
+
+/** 骨骼动画渲染器就绪（PetStage spine-ready）：接管后同步当前动作 */
+function onSpineReady(instance) {
+  player = instance
+  player.start(
+    () => actionSystem?.arrived(),
+    (x, facing) => {
+      actionSystem?.updatePosition(x, facing)
+      actionSystem?.tick()
+    }
+  )
+  // 补齐就绪前错过的初始指令（如载入时正在睡眠/昏迷）
+  if (actionSystem) {
+    const snap = actionSystem.snapshot()
+    if (snap.anim) player.play(snap.anim, snap.loop)
+    if (snap.moving) player.moveTo(snap.targetX)
+  }
+}
+
+// SVG 降级模式：动作时间推进由兜底定时器驱动
+function startFallbackTick() {
+  clearInterval(fallbackTickTimer)
+  fallbackTickTimer = setInterval(() => actionSystem?.tick(), 250)
+}
+
+// ---- 生命引擎事件（日志 / 弹层） ----
 function handleEvents(events) {
   const s = save.value
+  if (!s) return
   for (const e of events) {
     pushLog(s, e)
     if (['coma', 'dead', 'wake', 'grow', 'sick', 'starving'].includes(e.kind)) {
@@ -127,27 +220,31 @@ function refreshCooldowns() {
   cooldownRest.value = map
 }
 
-// ---- 行为循环：随机 / AI 双生命系统 ----
+// ---- 生命循环：每秒按真实时间差结算（生命系统独立驱动） ----
+function lifeTick() {
+  if (!save.value || !lifeRuntime) return
+  lifeRuntime.pump()
+  refreshCooldowns()
+}
+
+// ---- 行为循环：随机 / AI 双生命系统决策 ----
 function scheduleBehavior() {
   clearTimeout(behaviorTimer)
   const delay = 6000 + Math.random() * 8000
   behaviorTimer = setTimeout(async () => {
-    await decideBehavior()
+    await lifeRuntime?.decideOnce()
     scheduleBehavior()
   }, delay)
 }
 
-async function decideBehavior() {
+/** 双生命系统决策（供 lifeRuntime 调用） */
+async function decideBehavior(petState, sp, clock) {
   const s = save.value
-  if (!s || s.pet.dead || document.hidden) return
-  const sp = getSpecies(s.pet.speciesId, s.customSpecies)
-  if (!sp) return
-  const clock = s.gameClock
+  if (!s || s.pet.dead || document.hidden) return null
 
   if (s.settings.lifeSystem === 'ai' && aiReady.value) {
     if (Date.now() < aiCooldownUntil) {
-      applyBehavior(decideRandom(s.pet, sp, clock), false)
-      return
+      return decideRandom(petState, sp, clock)
     }
     const r = await decideAi(s.pet, sp, clock, { baseUrl: s.ai.baseUrl, apiKey: getApiKey(), model: s.ai.model }, {
       recentEvents: s.log
@@ -158,50 +255,43 @@ async function decideBehavior() {
       aiFailCount++
       if (aiFailCount >= 3) aiCooldownUntil = Date.now() + 60000
     }
-    applyBehavior(r, r.source === 'ai')
-  } else {
-    applyBehavior(decideRandom(s.pet, sp, clock), false)
+    return r
   }
+  return decideRandom(petState, sp, clock)
 }
 
-function applyBehavior({ behavior, say }, ai) {
-  currentBehavior.value = behavior
-  setBubble(say, ai)
-}
-
-// ---- 玩家操作 ----
-function onAct(actionId) {
+// ---- 玩家操作（经交互系统） ----
+function handleUserResult({ actionId, ok, message, event }) {
   const s = save.value
-  if (!s || s.pet.dead) return
-  const sp = getSpecies(s.pet.speciesId, s.customSpecies)
-  if (!sp) return
-  const r = performAction(s.pet, sp, actionId, s.gameClock)
-  if (r.event?.text) pushLog(s, r.event)
-  if (r.ok) {
-    setBubble(r.message)
-    if (actionId === 'play') currentBehavior.value = 'play'
-    if (actionId === 'sleep') currentBehavior.value = 'sleep'
+  if (!s) return
+  if (event?.text) pushLog(s, event)
+  if (ok) {
+    setBubble(message)
     persistSave(s)
   } else {
-    toast(r.message, 'warn')
+    toast(message, 'warn')
   }
   refreshCooldowns()
+}
+
+function onAct(actionId) {
+  if (!save.value || !interactions) return
+  interactions.user.request(actionId)
 }
 
 // ---- 摸头彩蛋 ----
 function onTouchPet() {
   const s = save.value
-  if (!s || s.pet.dead || s.pet.coma) return
+  if (!s || s.pet.dead || s.pet.coma || !interactions) return
   const now = Date.now()
   if (now - lastTouchAt < 15000) {
     setBubble('（舒服地眯起了眼）')
     return
   }
   lastTouchAt = now
-  s.pet.mood = Math.min(100, s.pet.mood + 2)
+  interactions.user.petTouch()
   pushLog(s, { t: s.gameClock, kind: 'touch', text: `你摸了摸 ${s.pet.name} 的头`, icon: '🤚' })
   setBubble('（开心地蹭了蹭你的手心）')
-  currentBehavior.value = 'beg'
 }
 
 // ---- 领养 ----
@@ -321,16 +411,19 @@ function doReset() {
 // ---- 循环管理 ----
 function startLoops() {
   stopLoops()
+  setupSystems()
   lifeTimer = setInterval(lifeTick, 1000)
   persistTimer = setInterval(() => {
     if (save.value) persistSave(save.value)
   }, 5000)
   scheduleBehavior()
+  if (!player) startFallbackTick() // SVG 降级：动作时长由定时器推进
 }
 
 function stopLoops() {
   clearInterval(lifeTimer)
   clearInterval(persistTimer)
+  clearInterval(fallbackTickTimer)
   clearTimeout(behaviorTimer)
 }
 
@@ -416,7 +509,7 @@ window.addEventListener('beforeunload', () => {
           :species="species"
           :stage-key="stage.key"
           :mood="pet.mood"
-          :behavior="currentBehavior"
+          :behavior="svgBehavior"
           :dead="pet.dead"
           :coma="pet.coma"
           :asleep="asleep"
@@ -426,6 +519,7 @@ window.addEventListener('beforeunload', () => {
           :clock-text="clockText"
           :pet-name="pet.name"
           @touch-pet="onTouchPet"
+          @spine-ready="onSpineReady"
         />
 
         <StatusPanel
