@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // 页面加载前置项：隐藏宿主环境注入的悬浮工具条（若存在）
+      try {
+        localStorage.setItem('nl-hud:public:v1', 'hidden')
+      } catch (e) {}
+    </script>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#EAF7F2" />
+    <meta name="description" content="天天电宠 —— 领养一只住在电波里的电子宠物：它会饿、会困、会撒娇，也会慢慢长大。支持现实同步或加速时间、AI 智能体生命系统，可离线游玩，存档可导出分享。" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="天天电宠" />
+    <title>天天电宠 · 电波里的小伙伴</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/games/tiantian-dianchong/main.js"></script>
+  </body>
+</html>
