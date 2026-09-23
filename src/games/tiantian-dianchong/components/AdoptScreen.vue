@@ -2,6 +2,7 @@
 // ============ 领养页：选物种（含 AI 生成新物种）+ 取名 + 开局 ============
 import { ref, computed } from 'vue'
 import PetAvatar from './PetAvatar.vue'
+import AiAuditPanel from './AiAuditPanel.vue'
 import { speciesList, speciesSummary, BUILTIN_SPECIES } from '../core/species.js'
 import { generateSpeciesByAi } from '../core/ai/species.js'
 import { hasApiKey } from '../core/storage.js'
@@ -30,6 +31,7 @@ const aiIdea = ref('')
 const aiBusy = ref(false)
 const aiErr = ref('')
 const aiDraft = ref(null) // { species } 待采用预览
+const auditOpen = ref(false) // AI 调用记录面板
 
 async function genSpecies() {
   if (aiBusy.value) return
@@ -119,8 +121,11 @@ function adoptNow() {
       <div v-if="aiOpen" class="ai-panel">
         <div class="ai-head">
           <span>🧬 AI 物种设计器</span>
-          <span class="ai-status" :class="aiCfg.baseUrl ? 'ok' : 'err'">
-            {{ aiCfg.baseUrl ? 'AI 已配置' : '未配置（可在领养后于设置中配置）' }}
+          <span class="ai-head-right">
+            <span class="ai-status" :class="aiCfg.baseUrl ? 'ok' : 'err'">
+              {{ aiCfg.baseUrl ? 'AI 已配置' : '未配置（可在领养后于设置中配置）' }}
+            </span>
+            <button class="btn tiny ghost" type="button" @click="auditOpen = true">🧾 记录</button>
           </span>
         </div>
         <p class="hint" style="margin: 6px 0 8px">
@@ -159,5 +164,8 @@ function adoptNow() {
         </div>
       </div>
     </div>
+
+    <!-- AI 调用记录（调试）：生成失败时可在此查阅完整提示词与输出 -->
+    <AiAuditPanel v-if="auditOpen" @close="auditOpen = false" />
   </div>
 </template>

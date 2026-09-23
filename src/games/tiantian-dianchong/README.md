@@ -125,14 +125,38 @@
 
 | 模块 | 职责 |
 | --- | --- |
-| core/ai/provider.js | OpenAI 兼容客户端：`POST {baseUrl}/chat/completions`（Bearer Key，模型可配）；`chat({system, user, json})`；JSON 解析带「抽取平衡花括号块」兜底；8s 超时；仅 HTTPS |
+| core/ai/provider.js | OpenAI 兼容客户端：`POST {baseUrl}/chat/completions`（Bearer Key，模型可配）；`chat({system, user, json, task})`；JSON 解析带「抽取平衡花括号块」兜底；8s 超时；仅 HTTPS；传 `task` 时自动入档审计库 |
 | core/ai/life.js | AI 行为决策：严格输出 `{"behavior":"…","say":"…"}`，behavior 白名单校验，失败降级随机系统 |
 | core/ai/species.js | AI 物种设计器：输入名字 + 灵感 → 完整物种 Schema JSON → `clampSpecies()` 钳制后进预览 |
 | core/ai/scene.js | AI 场景生成器：场景 Schema JSON → `clampScene()` 钳制 |
+| core/ai/audit.js | **AI 调用审计库**：提示词与结果按生成数据类型分类存放、查询、导出与清理（见 §4.1） |
 
 - 配置入口：设置面板「AI 智能体」区（Base URL / API Key / 模型名 + 测试连接）；未配置或测试失败时生命系统锁定为「随机」
 - **隐私**：仅发送宠物状态快照文本；API Key 只在本机浏览器；导出永远不含 Key
 - 降级链路：AI 失败 → 当次随机兜底 → 连续 3 次失败冷却 60s → 恢复后自动重试
+
+### 4.1 AI 调用审计（按生成数据类型分类管理提示词与结果）
+
+**动机**：AI 能力多点开花（行为 / 物种 / 场景 / 连接测试），出问题时需要回答「当时发了什么提示词、模型回了什么、结果用没用」。审计库让每一次真实发起的 AI 调用都自动分类落档，可查、可导、可清。
+
+**分类体系**（`AI_TASK_TYPES` 注册表，唯一权威）：
+
+| 类型 id | 含义 | 保留上限 | 触发方 |
+| --- | --- | --- | --- |
+| `behavior` | 行为决策（宠物行为与心声） | 40 | AI 生命系统行为循环 |
+| `species` | 物种设计（新物种定义） | 20 | 领养页 AI 物种设计器 |
+| `scene` | 场景生成（新场景定义） | 20 | AI 场景生成器（预留） |
+| `connection` | 连接测试 | 10 | 设置面板「测试连接」 |
+
+新增 AI 能力时登记新类型即可全链路复用：`registerAiTaskType('interaction', { label, icon, limit })`（如未来的宠物交互协调）。
+
+**记录内容**（每条）：真实时间 / 游戏时钟 / 标签（宠物名或物种名）/ 请求侧（接口地址、模型名、温度、完整 system 与 user 提示词）/ 响应侧（成功端点、状态码、耗时、token 用量、模型原始输出、解析后 JSON）/ 结果去向（`applied` 已采用 · `fallback` 已降级 · `rejected` 未采用）。
+
+**接入方式**：调用方仅在 `chat()` 时传 `task: { type, gameClock, tag }`，provider 统一入档；拿到 `entryId` 后在业务校验完成时 `annotateAudit(entryId, { used, note })` 标注去向。未发起调用（宠物睡眠 / 昏迷本地决策）不入档。
+
+**管理入口**：设置弹窗 AI 区「🧾 调用记录」与领养页 AI 设计器「🧾 记录」均打开 `AiAuditPanel`：分类 chips（含计数）→ 调用列表（时间 / 成败 / 摘要 / 耗时 / 去向）→ 点开详情（完整提示词与输出）→ 复制单条 JSON / 导出全部 / 按分类或全部清空；订阅审计库实时刷新。
+
+**安全与容量**：密钥绝不入档（记录点在 provider 层，拿不到 Key 字段），入档文本一律密钥形态掩码（`sk-…` / `Bearer …`）；存于独立 `localStorage['ttdc-ai-audit-v1']`，不随存档导出；单字段截断（system/user 各 4000 字、原始输出 6000 字）+ 每类 FIFO 上限 + 配额不足时淘汰最旧三分之一重试；导出文件名 `天天电宠-AI调用记录-日期.json`。
 
 ## 5. UI 与视觉
 
@@ -141,6 +165,7 @@
 - 延续本站手绘暖感，但主色切换为「电光青绿」（`--primary: #26B99A`，底色薄荷奶油），与消消乐形成姊妹感
 - 领养页：四物种卡片（造型预览 + 特性摘要 + 性格标签）→ 取名（≤8 字）→ 开局
 - 状态条 + 事件日志 + 设置弹窗（时间流速 / 生死开关（默认关，开启需二次确认）/ 生命系统切换 / AI 配置 / 场景切换 / 导入导出 / 重新领养）
+- AI 调用记录面板（AiAuditPanel.vue，调试工具）：按生成数据类型分类查阅每次 AI 调用的完整提示词与结果，支持复制 / 导出 / 分类清理
 
 ## 6. 目录结构
 
@@ -151,18 +176,19 @@ src/games/tiantian-dianchong/
 ├── style.css                   # 游戏设计系统
 ├── App.vue                     # 编排：领养页 / 主界面 / 设置 / 生命循环
 ├── components/                 # AdoptScreen / PetStage / PetAvatar / SceneBackdrop /
-│                               # StatusPanel / ActionBar / LogPanel / SettingsModal
+│                               # StatusPanel / ActionBar / LogPanel / SettingsModal /
+│                               # AiAuditPanel（AI 调用记录调试面板）
 ├── core/                       # 纯逻辑（无 Vue 依赖，Node 可直接单测）
 │   ├── time.js  species.js  life.js  behaviors.js  randomLife.js
 │   ├── actions.js  storage.js  scenes.js  interactions.js
-│   └── ai/                     # provider.js  life.js  species.js  scene.js
+│   └── ai/                     # provider.js  life.js  species.js  scene.js  audit.js
 └── README.md                   # 本设计文档
 public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
 ```
 
 ## 7. 测试
 
-- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**101 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 不足 1 小时的零头折算（不误跳整小时）/ 随机生命系统确定性与状态修正 / 存档导入导出回环与脏数据清洗 / AI JSON 解析、端点兼容、超时中止、行为白名单降级 / AI 物种与场景钳制 / 宠物间交互总线
+- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**130 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 不足 1 小时的零头折算（不误跳整小时）/ 随机生命系统确定性与状态修正 / 存档导入导出回环与脏数据清洗 / AI JSON 解析、端点兼容、超时中止、行为白名单降级 / AI 物种与场景钳制 / 宠物间交互总线 / AI 调用审计（四类分类入档、完整提示词、去向标注、密钥掩码、FIFO 上限、分类清空、导出、类型扩展、订阅、截断）
 - agent-browser E2E（生产构建 + 静态托管）：门户卡片 → 领养四物种 → 领养狗狗「旺财」→ nl-hud 预置 → 1× 时间节奏（15 秒仅微量消耗）→ 喂食（+38 饱食、日志、气泡）→ 玩耍与摸头彩蛋 → 重新领养（confirm + 清档）→ 600× 流速与场景切换 → 导出存档（blob 完整、无密钥）→ 导入回环（改名换场景、历史保留）→ AI 配置保存（cfg/key 分离存储）→ mock LLM 验证 AI 智能体生命系统（chat/completions 调用 + AI 台词气泡）→ SW 注册 → 断网重载完整可玩 → 浏览器回退门户；全程零控制台错误
 
 ## 8. 设计更新记录
@@ -170,6 +196,7 @@ public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
 | 日期 | 更新 |
 | --- | --- |
 | 2026-09-23 | 初版设计定稿；v1 开发完成：四内置物种 + 随机生命系统 + AI 智能体（行为/物种/场景三入口，OpenAI 兼容）+ 离线结算 + 存档导入导出 + PWA 离线可玩 |
+| 2026-09-23 | **AI 调用审计**：新增 core/ai/audit.js + AiAuditPanel.vue —— 提示词与结果按生成数据类型（行为/物种/场景/连接）分类存放与统一管理；provider.chat 传 task 自动入档，业务方 annotate 结果去向；分类浏览 / 复制 / 导出 / 清理；密钥永不入档且入档文本掩码；registerAiTaskType 可扩展新类型 |
 
 ## 9. 路线图（预留，未实现）
 

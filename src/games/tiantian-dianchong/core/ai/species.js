@@ -1,8 +1,10 @@
 // ============ AI 物种设计器 ============
 // 新增物种时调用 AI 模型确定其生命系统与行为模式：
 // 输入「物种名 + 灵感描述」→ 按物种 Schema 生成完整定义 → clampSpecies 钳制。
+// 每次调用按 species 类型入档审计库（完整提示词 + 模型输出 + 校验去向）。
 
 import { createAiClient } from './provider.js'
+import { annotateAudit, OUTCOMES } from './audit.js'
 import { clampSpecies } from '../species.js'
 
 const SCHEMA_PROMPT = `你是电子宠物游戏的物种设计师。根据用户给的物种名与灵感，设计一个可玩的电子宠物物种。
@@ -46,20 +48,32 @@ const SCHEMA_PROMPT = `你是电子宠物游戏的物种设计师。根据用户
  */
 export async function generateSpeciesByAi({ name, idea }, cfg, fetchImpl = null) {
   const client = createAiClient(cfg, fetchImpl)
-  if (!client.ready) return { ok: false, error: 'AI 未配置（请在设置中完成 AI 智能体配置）' }
 
   const res = await client.chat({
     system: SCHEMA_PROMPT,
     user: `物种名：${String(name || '').trim()}\n灵感描述：${String(idea || '').trim() || '（自由发挥）'}`,
     json: true,
-    temperature: 0.9
+    temperature: 0.9,
+    task: { type: 'species', tag: String(name || '').trim() }
   })
-  if (!res.ok) return { ok: false, error: res.error }
-  if (!res.data || typeof res.data !== 'object') return { ok: false, error: '模型输出无法解析为物种定义' }
+  if (!res.ok) {
+    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: `请求失败：${res.error}` })
+    return { ok: false, error: res.error }
+  }
+  if (!res.data || typeof res.data !== 'object') {
+    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: '模型输出无法解析为物种定义' })
+    return { ok: false, error: '模型输出无法解析为物种定义' }
+  }
 
   // 用户给的名字优先于模型命名
   if (name && String(name).trim()) res.data.name = String(name).trim().slice(0, 12)
   const species = clampSpecies(res.data)
-  if (!species) return { ok: false, error: '物种定义校验失败' }
+  if (!species) {
+    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: '物种定义未通过 Schema 校验' })
+    return { ok: false, error: '物种定义校验失败' }
+  }
+  if (res.entryId) {
+    annotateAudit(res.entryId, { used: OUTCOMES.APPLIED, note: `物种「${species.name}」Schema 校验通过，数值已按范围钳制` })
+  }
   return { ok: true, species, raw: res.data }
 }

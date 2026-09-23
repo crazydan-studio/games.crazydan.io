@@ -1,8 +1,10 @@
 // ============ AI 场景生成器（预留：动态生成新场景） ============
 // 当前游戏仅内置几个场景；本模块为「新增场景由 AI 模型动态生成」预留：
 // 输入「场景名 + 灵感」→ 场景 Schema JSON → clampScene 钳制 → 入本地场景库。
+// 每次调用按 scene 类型入档审计库（完整提示词 + 模型输出 + 校验去向）。
 
 import { createAiClient } from './provider.js'
+import { annotateAudit, OUTCOMES } from './audit.js'
 import { clampScene, PROP_TYPES } from '../scenes.js'
 
 const SCHEMA_PROMPT = `你是电子宠物游戏的场景设计师。根据用户给的场景名与灵感，设计一个宠物生活场景。
@@ -29,20 +31,35 @@ const SCHEMA_PROMPT = `你是电子宠物游戏的场景设计师。根据用户
  */
 export async function generateSceneByAi({ name, idea }, cfg, fetchImpl = null) {
   const client = createAiClient(cfg, fetchImpl)
-  if (!client.ready) return { ok: false, error: 'AI 未配置（请在设置中完成 AI 智能体配置）' }
 
   const res = await client.chat({
     system: SCHEMA_PROMPT,
     user: `场景名：${String(name || '').trim()}\n灵感描述：${String(idea || '').trim() || '（自由发挥）'}`,
     json: true,
-    temperature: 0.9
+    temperature: 0.9,
+    task: { type: 'scene', tag: String(name || '').trim() }
   })
-  if (!res.ok) return { ok: false, error: res.error }
-  if (!res.data || typeof res.data !== 'object') return { ok: false, error: '模型输出无法解析为场景定义' }
+  if (!res.ok) {
+    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: `请求失败：${res.error}` })
+    return { ok: false, error: res.error }
+  }
+  if (!res.data || typeof res.data !== 'object') {
+    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: '模型输出无法解析为场景定义' })
+    return { ok: false, error: '模型输出无法解析为场景定义' }
+  }
 
   if (name && String(name).trim()) res.data.name = String(name).trim().slice(0, 12)
   const scene = clampScene(res.data)
-  if (!scene) return { ok: false, error: '场景定义校验失败' }
-  if (!scene.props.length) return { ok: false, error: '模型没有给出有效的装饰件，请重试' }
+  if (!scene) {
+    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: '场景定义未通过 Schema 校验' })
+    return { ok: false, error: '场景定义校验失败' }
+  }
+  if (!scene.props.length) {
+    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: '没有白名单内的有效装饰件' })
+    return { ok: false, error: '模型没有给出有效的装饰件，请重试' }
+  }
+  if (res.entryId) {
+    annotateAudit(res.entryId, { used: OUTCOMES.APPLIED, note: `场景「${scene.name}」Schema 校验通过（${scene.props.length} 个装饰件）` })
+  }
   return { ok: true, scene }
 }

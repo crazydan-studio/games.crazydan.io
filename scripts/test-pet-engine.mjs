@@ -1,7 +1,7 @@
 // ============ 天天电宠 · 生命引擎单元测试（Node 直接运行，无浏览器依赖） ============
 // 覆盖：时间换算 / 物种系统与 AI 钳制 / 生命引擎（衰减·物种差异·生病·死亡开关·
 // 昏迷自愈·成长·离线结算·上限）/ 玩家操作与冷却 / 随机生命系统确定性 /
-// 存档导入导出回环 / AI Provider 解析与降级 / 宠物间交互总线
+// 存档导入导出回环 / AI Provider 解析与降级 / 宠物间交互总线 / AI 调用审计
 import assert from 'node:assert/strict'
 import { HOUR, DAY, clockNow, dayOf, hourOfDay, periodOfDay, fmtGameSpan } from '../src/games/tiantian-dianchong/core/time.js'
 import { BUILTIN_SPECIES, clampSpecies, getSpecies, stageOf, isSleepHour, speciesList } from '../src/games/tiantian-dianchong/core/species.js'
@@ -15,6 +15,18 @@ import { extractJson, createAiClient, testAiConnection } from '../src/games/tian
 import { decideAi } from '../src/games/tiantian-dianchong/core/ai/life.js'
 import { generateSpeciesByAi } from '../src/games/tiantian-dianchong/core/ai/species.js'
 import { generateSceneByAi } from '../src/games/tiantian-dianchong/core/ai/scene.js'
+import {
+  AI_TASK_TYPES,
+  OUTCOMES,
+  recordAiCall,
+  annotateAudit,
+  getAuditEntries,
+  auditStats,
+  clearAudit,
+  exportAudit,
+  subscribeAudit,
+  registerAiTaskType
+} from '../src/games/tiantian-dianchong/core/ai/audit.js'
 
 let passed = 0
 function ok(cond, msg) {
@@ -446,6 +458,123 @@ function advanceHours(save, hours, rng = never) {
 
   const gFail = await generateSpeciesByAi({ name: 'x' }, {}, null)
   ok(!gFail.ok, 'AI 物种：未配置时报错')
+}
+
+// ---------- 11. AI 调用审计：按生成数据类型分类存放提示词与结果 ----------
+{
+  clearAudit() // 隔离前序测试产生的记录
+  ok(
+    ['behavior', 'species', 'scene', 'connection'].every((k) => AI_TASK_TYPES[k]?.limit > 0),
+    '审计：内置行为/物种/场景/连接四类生成数据类型'
+  )
+
+  const cfg = { baseUrl: 'https://api.example.com', apiKey: 'sk-secret-key-123456', model: 'gpt-test' }
+  const save = makeSave('cat')
+
+  // 行为决策 → behavior 分类，含完整提示词、解析结果、去向、耗时与用量
+  const okFetch = async () => ({
+    ok: true,
+    json: async () => ({
+      choices: [{ message: { content: '{"behavior":"beg","say":"摸摸我嘛"}' } }],
+      usage: { prompt_tokens: 120, completion_tokens: 8, total_tokens: 128 }
+    })
+  })
+  await decideAi(save.pet, BUILTIN_SPECIES.cat, 10 * HOUR, cfg, { fetchImpl: okFetch })
+  const list = getAuditEntries('behavior')
+  ok(list.length === 1, '审计：行为决策入档 behavior 分类')
+  const be = list[0]
+  ok(be.request.system.includes('测试宠') && be.request.user.includes('饱食度'), '审计：完整提示词入档（system 含宠物人设，user 含状态快照）')
+  ok(be.response.data?.behavior === 'beg' && be.response.text.includes('摸摸我嘛'), '审计：解析结果与原始输出入档')
+  ok(be.outcome?.used === OUTCOMES.APPLIED, '审计：结果去向标注为已采用')
+  ok(typeof be.response.elapsed === 'number', '审计：耗时入档')
+  ok(be.response.usage?.prompt_tokens === 120, '审计：token 用量入档')
+  ok(be.response.url?.includes('/chat/completions'), '审计：成功端点入档')
+  ok(be.gameClock === 10 * HOUR && be.tag === '测试宠', '审计：游戏时钟与标签入档')
+  ok(!JSON.stringify(be).includes('sk-secret-key-123456'), '审计：记录不含 API 密钥')
+
+  // 白名单外行为 → fallback 去向
+  const badFetch = async () => ({
+    ok: true,
+    json: async () => ({ choices: [{ message: { content: '{"behavior":"fly","say":"我要飞"}' } }] })
+  })
+  await decideAi(save.pet, BUILTIN_SPECIES.cat, 10 * HOUR, cfg, { fetchImpl: badFetch })
+  {
+    const e = getAuditEntries('behavior')[0]
+    ok(e.outcome?.used === OUTCOMES.FALLBACK, '审计：校验未过标注为已降级')
+  }
+
+  // 物种设计 → species 分类
+  const speciesJson = JSON.stringify({
+    id: 'fire-fox', name: '火狐狸', emoji: '🦊', intro: '尾巴燃着暖火的小狐狸',
+    personality: ['热情'], traits: { metabolism: 1.4 },
+    look: { body: '#FF8C42', ear: 'pointed' }, quips: ['唔唔']
+  })
+  const fetchSpecies = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: speciesJson } }] }) })
+  await generateSpeciesByAi({ name: '火狐狸', idea: '一团温暖的火焰' }, cfg, fetchSpecies)
+  const se = getAuditEntries('species')[0]
+  ok(!!se && se.outcome?.used === OUTCOMES.APPLIED, '审计：物种设计入档 species 分类并标注已采用')
+  ok(se.request.system.includes('物种设计师') && se.tag === '火狐狸', '审计：物种提示词与标签入档')
+
+  // 场景生成 → scene 分类
+  const sceneJson = JSON.stringify({ id: 'beach', name: '海边沙滩', sky: ['#8ED9FF', '#DFF6FF'], ground: ['#F2DCA6', '#E2C68A'], groundY: 0.8, night: false, props: [{ type: 'cloud', x: 0.3, y: 0.1, s: 1 }] })
+  const fetchScene = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: sceneJson } }] }) })
+  await generateSceneByAi({ name: '海边沙滩', idea: '有海风' }, cfg, fetchScene)
+  ok(getAuditEntries('scene')[0]?.outcome?.used === OUTCOMES.APPLIED, '审计：场景生成入档 scene 分类并标注已采用')
+
+  // 连接测试 → connection 分类
+  const connFetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '{"ok":true}' } }] }) })
+  await testAiConnection(cfg, connFetch)
+  ok(getAuditEntries('connection')[0]?.outcome?.used === OUTCOMES.APPLIED, '审计：连接测试入档 connection 分类并标注去向')
+
+  // 输出中的密钥形态被掩码
+  const leakFetch = async () => ({
+    ok: true,
+    json: async () => ({ choices: [{ message: { content: '{"behavior":"play","say":"sk-leakytoken99"}' } }] })
+  })
+  await decideAi(save.pet, BUILTIN_SPECIES.cat, 10 * HOUR, cfg, { fetchImpl: leakFetch })
+  const leak = getAuditEntries('behavior')[0]
+  ok(!JSON.stringify(leak).includes('sk-leakytoken99') && JSON.stringify(leak).includes('***'), '审计：输出中的密钥形态被掩码')
+
+  // 分类 FIFO 上限
+  clearAudit('connection')
+  for (let i = 0; i < 14; i++) await testAiConnection(cfg, connFetch)
+  ok(getAuditEntries('connection').length === AI_TASK_TYPES.connection.limit, '审计：分类 FIFO 上限淘汰最旧记录')
+
+  // 全部列表最新在前 + 按分类清空互不影响
+  const all = getAuditEntries()
+  ok(all.length > 0 && all.every((e, i) => i === 0 || all[i - 1].at >= e.at), '审计：全部列表按时间最新在前')
+  ok(clearAudit('behavior') && getAuditEntries('behavior').length === 0 && getAuditEntries('connection').length > 0, '审计：按分类清空不影响其他分类')
+  ok(annotateAudit('nope-x', { used: OUTCOMES.APPLIED }) === false, '审计：未知 id 标注返回失败')
+
+  // 导出
+  const ex = exportAudit()
+  ok(ex.text.includes('tiantian-dianchong-ai-audit') && ex.text.includes('connection'), '审计：导出含应用标识与记录内容')
+  ok(!ex.text.includes('sk-secret-key-123456'), '审计：导出不含密钥')
+
+  // 扩展：登记新的生成数据类型
+  const reg = registerAiTaskType('interaction', { label: '宠物交互', icon: '🤝', limit: 5 })
+  ok(!!reg && AI_TASK_TYPES.interaction.limit === 5, '审计：可登记新生成数据类型')
+  ok(registerAiTaskType('Bad ID') === null, '审计：非法类型 id 被拒绝')
+  ok(recordAiCall('unknown-type', {}) === null, '审计：未登记类型不入档')
+  const iid = recordAiCall('interaction', { request: { system: 's', user: 'u' }, response: { ok: true, text: '{}' } })
+  ok(!!iid && getAuditEntries('interaction').length === 1, '审计：新类型记录可分类查询')
+
+  // 订阅通知
+  let notified = 0
+  const un = subscribeAudit(() => notified++)
+  recordAiCall('interaction', { request: {}, response: { ok: false, error: 'x' } })
+  un()
+  ok(notified >= 1, '审计：订阅在记录变更时收到通知')
+
+  // 超长文本截断
+  const long = 'x'.repeat(5000)
+  const tid = recordAiCall('interaction', { request: { system: long }, response: { text: long } })
+  const te = getAuditEntries('interaction').find((e) => e.id === tid)
+  ok(te.request.system.length < 5000 && te.request.system.includes('已截断'), '审计：超长提示词被截断保存')
+
+  // 清空全部 + 统计
+  clearAudit()
+  ok(auditStats().total.count === 0, '审计：清空全部记录')
 }
 
 console.log(`\n全部 ${passed} 项断言通过 ✅`)

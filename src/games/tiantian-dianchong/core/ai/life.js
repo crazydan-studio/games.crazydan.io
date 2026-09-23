@@ -2,8 +2,11 @@
 // 把宠物快照（物种人设/状态/最近事件/游戏时间）发给大模型，由模型决定
 // 此刻的行为与心声。失败（未配置/超时/解析失败/行为不在白名单）自动降级
 // 到随机生命系统当次兜底；连续失败进入冷却。
+// 每次「真实发起」的调用都会按 behavior 类型入档审计库（含完整提示词、
+// 模型输出与结果去向），可在「AI 调用记录」面板中分类查阅调试。
 
 import { createAiClient } from './provider.js'
+import { annotateAudit, OUTCOMES } from './audit.js'
 import { decideRandom } from '../randomLife.js'
 import { isBehavior } from '../behaviors.js'
 import { fmtGameTime, dayOf } from '../time.js'
@@ -45,10 +48,7 @@ function snapshotText(pet, species, clock, recentEvents) {
  */
 export async function decideAi(pet, species, clock, cfg, extras = {}) {
   const client = createAiClient(cfg, extras.fetchImpl)
-  if (!client.ready) {
-    return { ...decideRandom(pet, species, clock, extras.rng || Math.random), source: 'fallback', error: 'AI 未配置' }
-  }
-  // 睡着 / 昏迷 / 死亡：无需打扰模型，直接本地决策
+  // 睡着 / 昏迷 / 死亡：无需打扰模型，直接本地决策（不发起调用，也不入档）
   if (pet.dead || pet.coma || isAsleep(pet, species, clock)) {
     return { ...decideRandom(pet, species, clock, extras.rng || Math.random), source: 'fallback', error: null }
   }
@@ -58,14 +58,24 @@ export async function decideAi(pet, species, clock, cfg, extras = {}) {
     user: snapshotText(pet, species, clock, extras.recentEvents),
     json: true,
     temperature: 0.9,
-    signal: extras.signal
+    signal: extras.signal,
+    task: { type: 'behavior', gameClock: clock, tag: pet.name }
   })
 
   if (res.ok && res.data && isBehavior(res.data.behavior)) {
     const say = typeof res.data.say === 'string' && res.data.say.trim() ? res.data.say.trim().slice(0, 30) : '……'
+    if (res.entryId) {
+      annotateAudit(res.entryId, { used: OUTCOMES.APPLIED, note: `行为「${res.data.behavior}」通过白名单校验` })
+    }
     return { behavior: res.data.behavior, say, source: 'ai' }
   }
-  // 降级：当次随机兜底
+  // 降级：当次随机兜底，并在审计库标注去向
+  if (res.entryId) {
+    annotateAudit(res.entryId, {
+      used: OUTCOMES.FALLBACK,
+      note: res.ok ? '模型输出未通过行为白名单校验，已降级随机系统' : `请求失败已降级随机系统：${res.error}`
+    })
+  }
   return {
     ...decideRandom(pet, species, clock, extras.rng || Math.random),
     source: 'fallback',

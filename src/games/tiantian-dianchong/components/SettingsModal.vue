@@ -6,6 +6,7 @@ import { ref, computed, watch } from 'vue'
 import { TIME_SCALES } from '../core/time.js'
 import { testAiConnection } from '../core/ai/provider.js'
 import { hasApiKey, getApiKey } from '../core/storage.js'
+import AiAuditPanel from './AiAuditPanel.vue'
 
 const props = defineProps({
   save: { type: Object, required: true },
@@ -60,6 +61,7 @@ function onImportFile(e) {
 
 const aiReady = computed(() => !!(props.aiCfg.baseUrl && props.aiCfg.model && hasApiKey()))
 const fileInput = ref(null)
+const auditOpen = ref(false)
 </script>
 
 <template>
@@ -147,6 +149,7 @@ const fileInput = ref(null)
             测试连接
           </button>
           <button class="btn tiny primary" type="button" @click="saveAi">保存配置</button>
+          <button class="btn tiny ghost" type="button" @click="auditOpen = true">🧾 调用记录</button>
         </div>
         <p v-if="aiTest.message" class="ai-status" :class="{ ok: aiTest.status === 'ok', err: aiTest.status === 'err' }">
           {{ aiTest.message }}
@@ -187,5 +190,8 @@ const fileInput = ref(null)
         <button class="btn primary" type="button" @click="emit('close')">完成</button>
       </div>
     </div>
+
+    <!-- AI 调用记录（调试）：叠加在设置弹窗之上 -->
+    <AiAuditPanel v-if="auditOpen" @close="auditOpen = false" />
   </div>
 </template>
