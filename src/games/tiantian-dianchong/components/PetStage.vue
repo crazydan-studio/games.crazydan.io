@@ -1,11 +1,11 @@
 <script setup>
 // ============ 舞台：电子宠物机的「屏幕」 ============
-// 场景背景 + 骨骼动画画布（spine-webgl）+ 心声气泡 + 状态胶囊 + Zzz/病标。
+// 场景背景 + 骨骼动画画布（PixiJS + DragonBones）+ 心声气泡 + 状态胶囊 + Zzz/病标。
 // WebGL 不可用时自动降级为参数化 SVG 宠物（PetAvatar），玩法不受影响。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SceneBackdrop from './SceneBackdrop.vue'
 import PetAvatar from './PetAvatar.vue'
-import { createSpinePetPlayer } from '../spine/SpinePetPlayer.js'
+import { createDbPetPlayer } from '../db/PetPlayer.js'
 
 const props = defineProps({
   scene: { type: Object, required: true },
@@ -24,11 +24,11 @@ const props = defineProps({
   petName: { type: String, default: '' }
 })
 
-const emit = defineEmits(['touch-pet', 'spine-ready'])
+const emit = defineEmits(['touch-pet', 'bones-ready'])
 
 const canvasEl = ref(null)
-const spineMode = ref(false)
-const player = createSpinePetPlayer()
+const bonesMode = ref(false)
+const player = createDbPetPlayer()
 let resizeObserver = null
 
 const chips = computed(() => {
@@ -43,9 +43,9 @@ const chips = computed(() => {
 
 onMounted(async () => {
   // 画布常驻渲染（透明画布在 WebGL 失败时本就不可见，避免 v-show 隐藏导致初始尺寸为 0）
-  const ok = player.init(canvasEl.value)
+  const ok = await player.init(canvasEl.value)
   if (ok) {
-    spineMode.value = true
+    bonesMode.value = true
     await player.setSpecies(props.species)
     player.setStageConfig({ groundY: props.scene?.groundY ?? 0.76 })
     player.setAmbient({ stageKey: props.stageKey, illness: props.illness, dead: props.dead })
@@ -53,9 +53,9 @@ onMounted(async () => {
     resizeObserver = new ResizeObserver(() => player.resize())
     resizeObserver.observe(canvasEl.value)
     requestAnimationFrame(() => player.resize())
-    emit('spine-ready', player)
+    emit('bones-ready', player)
   }
-  // WebGL 不可用：spineMode 保持 false，模板渲染 SVG 降级
+  // WebGL 不可用：bonesMode 保持 false，模板渲染 SVG 降级
 })
 
 onBeforeUnmount(() => {
@@ -67,19 +67,19 @@ onBeforeUnmount(() => {
 watch(
   () => props.species,
   (sp) => {
-    if (spineMode.value && sp) player.setSpecies(sp)
+    if (bonesMode.value && sp) player.setSpecies(sp)
   }
 )
 watch(
   () => [props.stageKey, props.illness, props.dead],
   ([stageKey, illness, dead]) => {
-    if (spineMode.value) player.setAmbient({ stageKey, illness, dead })
+    if (bonesMode.value) player.setAmbient({ stageKey, illness, dead })
   }
 )
 watch(
   () => props.scene,
   (sc) => {
-    if (spineMode.value) player.setStageConfig({ groundY: sc?.groundY ?? 0.76 })
+    if (bonesMode.value) player.setStageConfig({ groundY: sc?.groundY ?? 0.76 })
   }
 )
 </script>
@@ -101,7 +101,7 @@ watch(
     <!-- 病标 / 昏迷标 -->
     <div v-if="illness && !dead" class="sick-pop">🤒</div>
 
-    <!-- 骨骼动画画布（WebGL；透明画布常驻，无内容时不可见） -->
+    <!-- 骨骼动画画布（PixiJS + DragonBones；透明画布常驻，无内容时不可见） -->
     <canvas
       ref="canvasEl"
       class="pet-canvas"
@@ -110,7 +110,7 @@ watch(
     />
 
     <!-- SVG 降级宠物（WebGL 不可用） -->
-    <div v-if="!spineMode" class="pet-wrap" @click.stop="$emit('touch-pet')" :title="dead ? '' : `摸摸 ${petName}`">
+    <div v-if="!bonesMode" class="pet-wrap" @click.stop="$emit('touch-pet')" :title="dead ? '' : `摸摸 ${petName}`">
       <PetAvatar
         :species="species"
         :stage-key="stageKey"

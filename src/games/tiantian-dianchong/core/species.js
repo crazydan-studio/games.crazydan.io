@@ -26,6 +26,9 @@ const EAR_STYLES = ['pointed', 'floppy', 'round', 'horn']
 const TAIL_STYLES = ['striped', 'wag', 'curly', 'spikes']
 const SNOUT_STYLES = ['cat', 'dog', 'pig', 'dino']
 const EXTRAS = ['whiskers', 'collar', 'tusks', 'back-spikes', 'none']
+// 骨骼动画资产键：内置猫/狗/恐龙使用「全网检索导入」的预设骨架数据（assets/db/），
+// 猪猪与 AI 生成物种无预设资产，由 db/skeletonFactory 程序化生成
+const RIG_ASSETS = ['cat', 'dog', 'dino']
 const pick = (v, list, fallback) => (list.includes(v) ? v : fallback)
 
 // ---- 内置物种 ----
@@ -35,6 +38,7 @@ export const BUILTIN_SPECIES = {
     name: '猫咪',
     emoji: '🐱',
     builtin: true,
+    rig: 'cat', // 预设骨骼资产（bahama 粉红猫，MPL-2.0）
     intro: '优雅的小猫咪，吃不多、爱睡觉，情感细腻，被冷落会闹小脾气。',
     personality: ['优雅', '黏人', '有点小傲娇'],
     traits: {
@@ -51,9 +55,9 @@ export const BUILTIN_SPECIES = {
     schedule: { sleep: [[13, 16], [23, 6]] }, // 午后小憩 + 夜里睡
     behaviors: { idle: 0.8, wander: 0.9, sleep: 1.4, play: 1.3, beg: 0.7, groom: 1.1, stare: 0.5 },
     look: {
-      body: '#F7C873',
-      belly: '#FDF1D8',
-      accent: '#E09B4E',
+      body: '#E85D9E',
+      belly: '#FBD9E8',
+      accent: '#C2447F',
       ear: 'pointed',
       tail: 'striped',
       snout: 'cat',
@@ -69,6 +73,7 @@ export const BUILTIN_SPECIES = {
     name: '狗狗',
     emoji: '🐶',
     builtin: true,
+    rig: 'dog', // 预设骨骼资产（bahama 紫色狗，MPL-2.0）
     intro: '热情的小狗，胃口大、爱运动，情绪稳定超黏人，最怕你不在家。',
     personality: ['热情', '忠诚', '永远开心'],
     traits: {
@@ -85,9 +90,9 @@ export const BUILTIN_SPECIES = {
     schedule: { sleep: [[22, 7]] }, // 早睡早起
     behaviors: { idle: 0.7, wander: 1.3, sleep: 0.9, play: 1.6, beg: 1.1, groom: 0.6, stare: 0.4 },
     look: {
-      body: '#E8A87C',
-      belly: '#FBEED9',
-      accent: '#C97B4A',
+      body: '#7B68A6',
+      belly: '#E8E0F0',
+      accent: '#5A4A85',
       ear: 'floppy',
       tail: 'wag',
       snout: 'dog',
@@ -103,6 +108,7 @@ export const BUILTIN_SPECIES = {
     name: '猪猪',
     emoji: '🐷',
     builtin: true,
+    // 无 rig：全网无许可合规的猪形 DragonBones 预设资产，骨骼动画由程序化生成
     intro: '憨憨的小猪，特别特别能吃，吃饱就心情超好，最大的梦想是睡到自然醒。',
     personality: ['憨厚', '吃货', '心宽体胖'],
     traits: {
@@ -137,6 +143,7 @@ export const BUILTIN_SPECIES = {
     name: '恐龙怪兽',
     emoji: '🦖',
     builtin: true,
+    rig: 'dino', // 预设骨骼资产（DragonBonesJS 官方 dragon_boy，MIT）
     intro: '来自远古电流的神秘怪兽：长得飞快、夜里活跃，情绪上来会小小暴走，但它其实很温柔。',
     personality: ['神秘', '远古血脉', '温柔暴走'],
     traits: {
@@ -153,9 +160,9 @@ export const BUILTIN_SPECIES = {
     schedule: { sleep: [[6, 12]] }, // 夜行性：白天睡觉
     behaviors: { idle: 0.7, wander: 1.2, sleep: 0.8, play: 1.5, beg: 0.9, groom: 0.4, stare: 0.6 },
     look: {
-      body: '#6FD08C',
-      belly: '#D9F3DF',
-      accent: '#2E9E6B',
+      body: '#58B368',
+      belly: '#F0DC8A',
+      accent: '#E88A3A',
       ear: 'horn',
       tail: 'spikes',
       snout: 'dino',
@@ -225,6 +232,9 @@ export function clampSpecies(raw) {
     extra: pick(raw.look?.extra, EXTRAS, 'none')
   }
 
+  // 骨骼动画资产键：仅接受白名单（自定义/AI 物种缺省为程序化生成）
+  const rig = RIG_ASSETS.includes(raw.rig) ? raw.rig : null
+
   const id = typeof raw.id === 'string' && /^[\w-]{1,32}$/.test(raw.id) ? raw.id : `custom-${Date.now()}`
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 12) : '神秘生物'
 
@@ -248,6 +258,7 @@ export function clampSpecies(raw) {
     name,
     emoji: typeof raw.emoji === 'string' && raw.emoji.trim() ? raw.emoji.trim().slice(0, 4) : '🧬',
     builtin: false,
+    rig,
     intro: typeof raw.intro === 'string' && raw.intro.trim() ? raw.intro.trim().slice(0, 80) : '由 AI 设计的新物种。',
     personality: (Array.isArray(raw.personality) ? raw.personality : [])
       .filter((p) => typeof p === 'string' && p.trim())

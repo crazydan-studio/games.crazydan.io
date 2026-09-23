@@ -24,17 +24,17 @@ defineEmits(['play'])
           <ellipse cx="100" cy="188" rx="44" ry="7" fill="rgba(30,60,50,0.13)" />
           <g class="pet-body">
             <g class="pet-tail">
-              <path d="M148 138 Q186 122 176 82" fill="none" stroke="#E09B4E" stroke-width="11" stroke-linecap="round" />
+              <path d="M148 138 Q186 122 176 82" fill="none" stroke="#C2447F" stroke-width="11" stroke-linecap="round" />
               <path d="M168 96 q6 10 2 18 M174 82 q4 8 1 14" fill="none" stroke="#4A3728" stroke-width="4" stroke-linecap="round" opacity="0.55" />
             </g>
-            <ellipse cx="100" cy="142" rx="43" ry="33" fill="#F7C873" />
-            <ellipse cx="100" cy="152" rx="25" ry="19" fill="#FDF1D8" />
-            <path d="M58 58 L66 16 L92 40 Z" fill="#F7C873" />
-            <path d="M142 58 L134 16 L108 40 Z" fill="#F7C873" />
-            <path d="M65 50 L69 28 L83 41 Z" fill="#E09B4E" opacity="0.75" />
-            <path d="M135 50 L131 28 L117 41 Z" fill="#E09B4E" opacity="0.75" />
-            <circle cx="100" cy="86" r="44" fill="#F7C873" />
-            <path d="M64 96 a44 44 0 0 0 72 0 a40 40 0 0 1 -72 0 Z" fill="#FDF1D8" opacity="0.55" />
+            <ellipse cx="100" cy="142" rx="43" ry="33" fill="#E85D9E" />
+            <ellipse cx="100" cy="152" rx="25" ry="19" fill="#FBD9E8" />
+            <path d="M58 58 L66 16 L92 40 Z" fill="#E85D9E" />
+            <path d="M142 58 L134 16 L108 40 Z" fill="#E85D9E" />
+            <path d="M65 50 L69 28 L83 41 Z" fill="#C2447F" opacity="0.75" />
+            <path d="M135 50 L131 28 L117 41 Z" fill="#C2447F" opacity="0.75" />
+            <circle cx="100" cy="86" r="44" fill="#E85D9E" />
+            <path d="M64 96 a44 44 0 0 0 72 0 a40 40 0 0 1 -72 0 Z" fill="#FBD9E8" opacity="0.55" />
             <g class="pet-eyes">
               <g class="eye-happy" stroke="#4A3728" stroke-width="4.5" fill="none">
                 <path d="M75 82 q9 -12 18 0" />

@@ -1,7 +1,10 @@
-// ============ 电宠动画库：参数化生成 Spine 动画时间线 ============
-// 全部动画按「标准骨骼名」生成（root/body/head/ear-l/ear-r/tail-1/tail-2/
-// leg-fl/leg-fr/leg-bl/leg-br），任何物种（内置或 AI 生成）共用同一套
-// 装配，因此同一份生成器适配所有 look 变体。
+// ============ 电宠动画库：参数化生成骨骼动画时间线 ============
+// 产出「中性时间线数据」（与运行时格式解耦），由 skeletonFactory.js
+// 转换为 DragonBones JSON 动画：
+//   · 时间线数值为相对 setup pose 的增量（y 向上、逆时针为正）
+//   · 全部动画按「标准骨骼名」生成（root/body/head/ear-l/ear-r/tail-1/
+//     tail-2/leg-fl/leg-fr/leg-bl/leg-br），任何物种（内置或 AI 生成）
+//     共用同一套装配，因此同一份生成器适配所有 look 变体。
 //
 // 物种特质 → 动画风格（生命系统的参数「看得见」）：
 //   metabolism     呼吸幅度（代谢越快呼吸越明显）
@@ -31,7 +34,7 @@ function slotsOf(slots) {
 
 /**
  * 生成物种的完整动画集合
- * @returns {object} Spine JSON 的 animations 节点
+ * @returns {object} 中性动画时间线集合（供 skeletonFactory 转换为 DragonBones 动画）
  */
 export function buildAnimations(species) {
   const t = species.traits || {}

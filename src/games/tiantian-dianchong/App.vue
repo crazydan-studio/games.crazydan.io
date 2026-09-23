@@ -161,18 +161,19 @@ function setupSystems() {
 
   lifeRuntime.bootstrap()
 
-  // E2E / 现场排查调试钩子（只读快照，不影响运行）
+  // E2E / 现场排查调试钩子（只读快照 + 渲染器引用，不影响运行）
   if (typeof window !== 'undefined') {
     window.__dcDebug = {
       anchors: () => interactions?.scene.anchors() || {},
       action: () => actionSystem?.snapshot() || null,
-      bus: () => (bus ? bus.recent(12) : [])
+      bus: () => (bus ? bus.recent(12) : []),
+      player: () => player
     }
   }
 }
 
-/** 骨骼动画渲染器就绪（PetStage spine-ready）：接管后同步当前动作 */
-function onSpineReady(instance) {
+/** 骨骼动画渲染器就绪（PetStage bones-ready）：接管后同步当前动作 */
+function onPlayerReady(instance) {
   player = instance
   player.start(
     () => actionSystem?.arrived(),
@@ -519,7 +520,7 @@ window.addEventListener('beforeunload', () => {
           :clock-text="clockText"
           :pet-name="pet.name"
           @touch-pet="onTouchPet"
-          @spine-ready="onSpineReady"
+          @bones-ready="onPlayerReady"
         />
 
         <StatusPanel

@@ -112,7 +112,7 @@ server {
 ## 测试
 
 ```bash
-pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：生命引擎 352 项断言
+pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：生命引擎 912 项断言
                 # （纯逻辑，Node 直接运行，含非方阵棋盘与时间推进/生死开关/AI 降级/
                 #  指令总线/动作系统/骨骼资产与真实 Spine 运行时解析等用例）
 ```
@@ -121,4 +121,7 @@ pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：�
 
 本项目代码遵循 [Apache License 2.0](./LICENSE)。
 
-> 例外说明：`@esotericsoftware/spine-webgl`（天天电宠的骨骼动画运行时）为第三方依赖，遵循其自带的 [Spine Runtimes License Agreement](https://github.com/EsotericSoftware/spine-runtimes/blob/4.3/LICENSE)——允许集成与再分发（需保留其版权与许可声明），具体条款以该协议为准；本作的全部骨骼/贴图/动画数据均为运行时程序化生成，不包含任何 Spine 官方示例资产。
+> 例外说明：
+> - `pixi.js` + `pixi-dragonbones-runtime`（天天电宠的骨骼动画运行时）均为 MIT 许可（后者内含 DragonBones 官方 MIT 运行时）。
+> - `public/tiantian-dianchong/assets/db/` 下的预设骨骼资产：猫/狗来自 [chimple/bahama](https://github.com/chimple/bahama)（MPL-2.0），恐龙来自 [DragonBones/DragonBonesJS](https://github.com/DragonBones/DragonBonesJS)（MIT）——来源与许可见 `assets/db/ATTRIBUTION.md`，各目录附许可证副本。
+> - 猪猪与 AI 生成物种的骨骼/贴图/动画数据均为运行时程序化生成，零外部资产文件。

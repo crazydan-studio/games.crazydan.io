@@ -1,13 +1,14 @@
 // ============ 电宠部件图集：运行时 Canvas2D 绘制 ============
 // 依据物种 look 参数（配色/耳型/尾型/鼻吻/附加件）把宠物的所有
-// 骨骼动画「贴图部件」绘制到一张离线画布上，并产出 Spine atlas 文本：
+// 骨骼动画「贴图部件」绘制到一张离线画布上：
 //   · 零外部资源文件：图集随物种即时生成，AI 新物种即刻拥有骨骼动画
 //   · 造型与 PetAvatar SVG 同源（同一套配色与形体语言）
-// 画布坐标 y 向下；部件以所在单元中心为原点绘制。
+//   · regions 即 DragonBones 贴图集 SubTexture 的矩形数据源
+// 画布坐标 y 向下；部件以所在单元中心为原点绘制（即图像中心锚点）。
 //
 // 产出：
 //   buildPetParts(species) → {
-//     pageName, width, height, drawTo(canvas), regions, atlasText
+//     pageName, width, height, regions, subTextures, drawTo(canvas)
 //   }
 
 const INK = '#4A3728'
@@ -605,7 +606,7 @@ function requiredParts(look) {
 
 /**
  * 绘制物种部件图集
- * @returns {{ pageName, width, height, regions, atlasText, drawTo(canvas) }}
+ * @returns {{ pageName, width, height, regions, subTextures, drawTo(canvas) }}
  */
 export function buildPetParts(species) {
   const look = species.look
@@ -641,16 +642,13 @@ export function buildPetParts(species) {
     return regions
   }
 
-  // atlas 文本（Spine libgdx 格式；空行=换页符，故区域内不允许空行；
-  // pma:false = 直通 alpha，运行时上传时预乘）
-  const lines = [`${species.id}-parts.png`, `size: ${width}, ${height}`, 'filter: linear, linear', 'pma: false']
-  for (const name of names) {
+  // DragonBones 贴图集 SubTexture（部件即全部内容，无裁剪补偿）
+  const subTextures = names.map((name) => {
     const r = regions[name]
-    lines.push(name, `bounds: ${r.x}, ${r.y}, ${r.w}, ${r.h}`)
-  }
-  const atlasText = lines.join('\n') + '\n'
+    return { name, x: r.x, y: r.y, width: r.w, height: r.h }
+  })
 
-  return { pageName: `${species.id}-parts.png`, width, height, regions, atlasText, drawTo }
+  return { pageName: `${species.id}-parts.png`, width, height, regions, subTextures, drawTo }
 }
 
 export const PARTS_DEBUG = { CELL, COLS, ROWS, INK }

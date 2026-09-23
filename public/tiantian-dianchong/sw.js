@@ -13,7 +13,17 @@ const CORE_ASSETS = [
   './favicon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-maskable-512.png'
+  './icons/icon-maskable-512.png',
+  // DragonBones 预设骨骼资产（猫/狗/恐龙；猪与 AI 物种为程序化生成，随 JS 打包）
+  './assets/db/cat/cat_ske.json',
+  './assets/db/cat/cat_tex.json',
+  './assets/db/cat/cat_tex.png',
+  './assets/db/dog/dog_ske.json',
+  './assets/db/dog/dog_tex.json',
+  './assets/db/dog/dog_tex.png',
+  './assets/db/dino/dragon_boy_ske.json',
+  './assets/db/dino/dragon_boy_tex.json',
+  './assets/db/dino/dragon_boy_tex.png'
 ]
 
 function isDevPath(pathname) {
