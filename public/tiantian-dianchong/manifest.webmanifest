@@ -1,0 +1,32 @@
+{
+  "name": "天天电宠 · 电波里的小伙伴",
+  "short_name": "天天电宠",
+  "description": "领养一只住在电波里的电子宠物：它会饿、会困、会撒娇，也会慢慢长大。支持现实同步或加速时间、AI 智能体生命系统，离线可玩，存档可导出分享。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EAF7F2",
+  "theme_color": "#26B99A",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

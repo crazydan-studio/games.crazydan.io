@@ -12,11 +12,13 @@ Crazydan Studio 的网页小游戏合集仓库。**主模块（门户）位于�
 ├── src/
 │   ├── portal/                 # 主模块：门户页面（入口卡片列表 + 游戏注册表）
 │   └── games/
-│       └── tiantian-xiaoxiaole/    # 游戏：天天消消乐（入口页 index.html + 源码 + [模块说明](./src/games/tiantian-xiaoxiaole/README.md)）
+│       ├── tiantian-xiaoxiaole/    # 游戏：天天消消乐（入口页 index.html + 源码 + [模块说明](./src/games/tiantian-xiaoxiaole/README.md)）
+│       └── tiantian-dianchong/     # 游戏：天天电宠（入口页 + 源码 + [详细设计文档](./src/games/tiantian-dianchong/README.md)）
 ├── public/
 │   ├── favicon.svg             # 门户静态资源
-│   └── tiantian-xiaoxiaole/    # 游戏静态资源（PWA 清单/图标/SW/示例表情包）
-├── scripts/                    # 测试与资源生成脚本（引擎单测、示例表情包）
+│   ├── tiantian-xiaoxiaole/    # 天天消消乐静态资源（PWA 清单/图标/SW/示例表情包）
+│   └── tiantian-dianchong/     # 天天电宠静态资源（PWA 清单/图标/SW）
+├── scripts/                    # 测试与资源生成脚本（三消引擎单测、生命引擎单测、示例表情包）
 ├── vite.config.js              # 统一 Vite 配置（MPA 多入口，一次构建产出全站）
 └── package.json                # 唯一的包定义（门户 + 所有游戏共享依赖）
 ```
@@ -39,6 +41,18 @@ Crazydan Studio 的网页小游戏合集仓库。**主模块（门户）位于�
 - **表情包导入导出**：一键打包 `.zip` 下载，可存放至手机；解压后可作为静态资源部署到服务端，游戏内「从服务器导入」输入地址即回导入
 - **PWA**：可安装到桌面/主屏，Service Worker 缓存应用外壳，**离线可玩**
 
+### [天天电宠](./src/games/tiantian-dianchong/)（`src/games/tiantian-dianchong`，线上 `/tiantian-dianchong/`）
+
+领养一只住在电波里的电子宠物（[详细设计文档](./src/games/tiantian-dianchong/README.md)）：
+
+- **多物种养成**：猫、狗、猪、恐龙怪兽各有独立的生命系统与行为模式（饥饿速率 / 作息 / 情绪波动 / 恢复力等差异），可为宠物取名
+- **生命模拟**：随时间成长、饥饿、生病、情绪变化；时间可与现实同步，也可 60×～3600× 加速；离线后回来会结算离开的时光
+- **双生命系统**：内置**随机生命系统**（离线可玩）+ 可配置接入主流大模型的 **AI 智能体生命系统**（OpenAI 兼容接口，驱动宠物行为与心声，失败自动降级）
+- **AI 物种设计器**：在领养页用 AI 生成全新物种（生命参数 + 行为模式 + 外形，经 Schema 钳制校验）
+- **生死设定**：死亡可选且默认禁用（健康触底只会昏迷，照料即醒）；预留宠物间交互总线与多宠物 / 场景切换扩展点
+- **场景**：内置客厅 / 草地 / 卧室 / 星空露台四个场景，预留 AI 动态生成场景
+- **数据自主**：存档 JSON 一键导出 / 导入，支持备份、分享、跨设备同步；PWA **离线可玩**，可安装到主屏
+
 ## 环境要求
 
 - Node.js ≥ 18（推荐 20+）
@@ -52,7 +66,7 @@ pnpm install    # 一次性安装全仓依赖（门户 + 所有游戏）
 pnpm dev        # 统一 dev server：http://localhost:5173
 ```
 
-门户与各游戏运行在**同一个 dev server** 上：门户位于 `/`，游戏位于 `/tiantian-xiaoxiaole/`（直接访问或从门户卡片点击进入均可）。开发态与生产构建后的路由行为完全一致，不再需要为每个游戏单独启动 dev server。
+门户与各游戏运行在**同一个 dev server** 上：门户位于 `/`，游戏位于 `/tiantian-xiaoxiaole/`、`/tiantian-dianchong/`（直接访问或从门户卡片点击进入均可）。开发态与生产构建后的路由行为完全一致，不再需要为每个游戏单独启动 dev server。
 
 ## 构建与部署
 
@@ -67,6 +81,7 @@ pnpm build      # 单次 MPA 构建：门户 + 所有游戏，统一输出至 di
 | `dist/index.html` | 门户入口（游戏列表） |
 | `dist/tiantian-xiaoxiaole/index.html` | 天天消消乐入口 |
 | `dist/tiantian-xiaoxiaole/expressions/` | 示例表情包（静态资源部署演示） |
+| `dist/tiantian-dianchong/index.html` | 天天电宠入口 |
 
 将 `dist/` 整体上传至任意静态服务器即可，例如 nginx：
 
@@ -97,7 +112,8 @@ server {
 ## 测试
 
 ```bash
-pnpm test       # 天天消消乐：三消引擎 24 项断言（纯逻辑，Node 直接运行，含非方阵棋盘用例）
+pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：生命引擎 101 项断言
+                # （纯逻辑，Node 直接运行，含非方阵棋盘与时间推进/生死开关/AI 降级等用例）
 ```
 
 ## 协议

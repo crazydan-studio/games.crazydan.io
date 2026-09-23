@@ -8,7 +8,7 @@ const ROOT = dirname(fileURLToPath(import.meta.url))
 const r = (p) => fileURLToPath(new URL(p, import.meta.url))
 
 // 参与构建的游戏（入口页 src/games/<name>/index.html + 静态资源 public/<name>/）
-const GAME_ENTRIES = ['tiantian-xiaoxiaole']
+const GAME_ENTRIES = ['tiantian-xiaoxiaole', 'tiantian-dianchong']
 
 // ============ 游戏页面插件：入口页随源码放在 src/games/<name>/，线上仍挂 /<name>/ ============
 // 构建侧：把 HTML 入口登记为「虚拟路径」<root>/<name>/index.html（磁盘上不存在），

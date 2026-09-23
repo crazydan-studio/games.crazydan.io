@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node scripts/test-engine.mjs",
+    "test": "node scripts/test-engine.mjs && node scripts/test-pet-engine.mjs",
     "gen:pack": "node scripts/gen-sample-pack.mjs"
   },
   "dependencies": {
