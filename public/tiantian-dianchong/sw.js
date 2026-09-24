@@ -4,7 +4,18 @@
 //   · 静态资源：缓存优先（首次访问后全部落入缓存，断网可玩）
 //   · 开发服务器路径（/src/、/@vite 等）：永远走网络，避免冻结 HMR
 //   · AI 接口请求（外部 origin / POST）：不经 SW，天然直连
-const CACHE = 'ttdc-cache-v3' // 资产更新（pig.glb 修复）→ 缓存版本必须升级
+//
+// v4 加固（修复线上报错「A ServiceWorker intercepted the request and
+// encountered an unexpected error」——SW 更新抢占导致在途大 chunk 请求被掐断）：
+//   · activate 不再自动 clients.claim()：SW 更新时正在加载的页面（含 Babylon 主
+//     chunk 等在途请求）继续由旧 SW 服务，新 SW 自下次导航起接管，彻底规避
+//     「worker 被替换 → 在途 respondWith 被杀 → 主 chunk 加载失败」的竞态；
+//   · 首次安装后的接管改为页面加载完成主动发 'CLAIM' 消息触发（彼时页面资源已
+//     就绪，无在途请求，抢占安全），离线补热逻辑随之执行；
+//   · 缓存清理只删本游戏 ttdc-cache-* 前缀，不再误删同源其他游戏（消消乐）缓存；
+//   · respondWith 全路径 try/catch 兜底：任何异常回落网络/504，绝不 reject；
+//   · 导航响应只有 fresh.ok 才写缓存，避免把 4xx/5xx 错误页污染离线兜底。
+const CACHE = 'ttdc-cache-v4'
 
 const CORE_ASSETS = [
   './',
@@ -84,20 +95,32 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys()
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-      await self.clients.claim()
+      // 只清理本游戏的历史版本缓存；同源其他游戏（tiantian-xiaoxiaole 等）不动
+      await Promise.all(
+        keys.filter((k) => k.startsWith('ttdc-cache-') && k !== CACHE).map((k) => caches.delete(k))
+      )
+      // 注意：这里不调用 clients.claim()。更新场景下由旧 SW 继续服务当前页面直到
+      // 下次导航，避免 worker 替换掐断在途请求；首次安装的接管由页面在 load 完成
+      // 后发 'CLAIM' 消息触发（见 main.js）。
     })()
   )
 })
 
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting()
+  // 页面资源加载完毕后的安全接管（仅首次安装场景使用，见 main.js）
+  if (event.data === 'CLAIM') self.clients.claim()
 })
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET') return
-  const url = new URL(req.url)
+  let url
+  try {
+    url = new URL(req.url)
+  } catch {
+    return
+  }
   if (url.origin !== self.location.origin) return
   if (isDevPath(url.pathname)) return
 
@@ -107,35 +130,41 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(req)
-          try {
-            const cache = await caches.open(CACHE)
-            cache.put('./index.html', fresh.clone())
-          } catch {
-            /* 克隆失败不影响返回 */
+          if (fresh && fresh.ok) {
+            try {
+              const cache = await caches.open(CACHE)
+              cache.put('./index.html', fresh.clone())
+            } catch {
+              /* 克隆失败不影响返回 */
+            }
           }
           return fresh
         } catch {
-          return (
-            (await caches.match(req)) ||
-            (await caches.match('./index.html')) ||
-            (await caches.match('./')) ||
-            new Response('<h1>离线中</h1><p>这只电宠还没缓存好这一页，联网打开一次即可离线游玩～</p>', {
-              headers: { 'Content-Type': 'text/html; charset=utf-8' },
-              status: 200
-            })
-          )
+          try {
+            return (
+              (await caches.match(req)) ||
+              (await caches.match('./index.html')) ||
+              (await caches.match('./')) ||
+              new Response('<h1>离线中</h1><p>这只电宠还没缓存好这一页，联网打开一次即可离线游玩～</p>', {
+                headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                status: 200
+              })
+            )
+          } catch {
+            return new Response('', { status: 504, statusText: 'Offline' })
+          }
         }
       })()
     )
     return
   }
 
-  // 静态资源：缓存优先，未命中则网络并写缓存
+  // 静态资源：缓存优先，未命中则网络并写缓存；任何异常兜底，绝不 reject
   event.respondWith(
     (async () => {
-      const hit = await caches.match(req, { ignoreSearch: false })
-      if (hit) return hit
       try {
+        const hit = await caches.match(req)
+        if (hit) return hit
         const fresh = await fetch(req)
         if (fresh && fresh.ok) {
           try {

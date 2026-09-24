@@ -47,6 +47,12 @@ export async function importGlb(url, scene) {
   if (!meshCache.has(url)) {
     try {
       const r = await SceneLoader.ImportMeshAsync('', url, '', scene || undefined)
+      // GLTF 加载器默认自动播放首个动画组（fox 首组恰为 Attack）——原始骨架会被
+      // 永久空转驱动（E2E 实测 57 个 animatable 白耗 CPU）。克隆体独立于此，
+      // 统一停掉原始组：可见动画只由克隆体（pet-skel）驱动。
+      for (const g of r.animationGroups || []) {
+        try { g.stop() } catch { /* ignore */ }
+      }
       const pack = { root: r.rootNode ?? r.meshes[0], meshes: r.meshes, groups: r.animationGroups, skeletons: r.skeletons }
       // 原始体禁用（保留对象可供后续 clone；克隆时须显式 setEnabled(true)）
       for (const m of pack.meshes) {
@@ -261,13 +267,17 @@ export function setupLighting(scene, { night, isRoom }) {
 
   let lamp = null
   if (night) {
-    hemi.intensity = 0.38
-    hemi.diffuse = new Color3(0.62, 0.68, 0.9)
-    hemi.groundColor = new Color3(0.18, 0.2, 0.32)
-    dir.intensity = 0.5
-    dir.diffuse = new Color3(0.7, 0.74, 0.95)
+    // 夜景亮度校准（历史坑）：PBR 材质无环境贴图，仅靠直射光照明；Quaternius
+    // 模型反照率普遍偏暗（狐狸主色 0.37/0.14/0.04），夜灯过弱时宠物会糊成
+    // 黑色剪影（E2E 实测宠物区均值仅 rgb(125,105,92)）。提到「月光夜」而非
+    // 「烛光夜」：保持氛围的同时宠物轮廓与暖色始终可读。
+    hemi.intensity = 0.62
+    hemi.diffuse = new Color3(0.66, 0.72, 0.95)
+    hemi.groundColor = new Color3(0.24, 0.26, 0.4)
+    dir.intensity = 0.75
+    dir.diffuse = new Color3(0.74, 0.78, 0.98)
     lamp = new PointLight('b3d-lamp', new Vector3(-1.2, 2.6, -0.5), scene)
-    lamp.intensity = 0.85
+    lamp.intensity = 1.15
     lamp.diffuse = new Color3(1, 0.82, 0.55)
     lamp.range = 14
   } else {

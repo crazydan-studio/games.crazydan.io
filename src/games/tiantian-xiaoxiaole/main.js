@@ -10,15 +10,17 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('./sw.js')
-      // 首次访问时，页面资源在 SW 接管前就已加载完毕（不会经过 fetch 拦截），
-      // 因此等 SW 接管后主动「补热」：把这些资源重新请求一遍写入缓存，
-      // 实现「打开一次即可完全离线游玩」。
-      if (navigator.serviceWorker.controller) return // 已被接管（非首次），资源天然走缓存
-      if (reg.active) {
-        warmUpCache()
-      } else {
-        navigator.serviceWorker.addEventListener('controllerchange', warmUpCache, { once: true })
+      if (navigator.serviceWorker.controller) {
+        // 本次页面已被 SW 接管（更新场景由旧 SW 继续服务）：不打扰当前页，
+        // 新 SW 自下次导航起生效，避免 SW 更新掐断在途请求
+        return
       }
+      // 首次访问：等新 SW 就绪后请求「安全接管」——此时页面资源已全部加载完毕，
+      // 接管不会影响任何在途请求；接管成功后由 warmUpCache 补写缓存，
+      // 实现「打开一次即可完全离线游玩」。
+      await navigator.serviceWorker.ready
+      if (reg.active) reg.active.postMessage('CLAIM')
+      navigator.serviceWorker.addEventListener('controllerchange', warmUpCache, { once: true })
     } catch {
       /* 注册失败（如非安全源）不影响游戏本身 */
     }

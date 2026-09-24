@@ -4,7 +4,13 @@
 //   · 静态资源：缓存优先（首次访问后全部落入缓存，断网可玩）
 //   · 开发服务器路径（/src/、/@vite 等）：永远走网络，避免冻结 HMR
 //   · blob:/objectURL（IndexedDB 表情图）不经 SW，天然离线可用
-const CACHE = 'ttxsl-cache-v2'
+//
+// v3 加固（与天天电宠 sw.js v4 同步）：
+//   · activate 不再自动 clients.claim()，避免 SW 更新掐断在途请求；首次安装
+//     由页面加载完成后发 'CLAIM' 消息触发安全接管；
+//   · 缓存清理只删本游戏 ttxsl-cache-* 前缀，不误删同源其他游戏缓存；
+//   · 导航响应只有 fresh.ok 才写缓存，避免错误页污染离线兜底。
+const CACHE = 'ttxsl-cache-v3'
 
 const CORE_ASSETS = [
   './',
@@ -55,20 +61,31 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys()
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-      await self.clients.claim()
+      // 只清理本游戏的历史版本缓存；同源其他游戏（tiantian-dianchong 等）不动
+      await Promise.all(
+        keys.filter((k) => k.startsWith('ttxsl-cache-') && k !== CACHE).map((k) => caches.delete(k))
+      )
+      // 不调用 clients.claim()：更新场景由旧 SW 继续服务当前页面至下次导航；
+      // 首次安装的接管由页面在 load 完成后发 'CLAIM' 消息触发（见 main.js）。
     })()
   )
 })
 
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting()
+  // 页面资源加载完毕后的安全接管（仅首次安装场景使用，见 main.js）
+  if (event.data === 'CLAIM') self.clients.claim()
 })
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET') return
-  const url = new URL(req.url)
+  let url
+  try {
+    url = new URL(req.url)
+  } catch {
+    return
+  }
   if (url.origin !== self.location.origin) return
   if (isDevPath(url.pathname)) return
 
@@ -78,35 +95,41 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(req)
-          try {
-            const cache = await caches.open(CACHE)
-            cache.put('./index.html', fresh.clone())
-          } catch {
-            /* 克隆失败不影响返回 */
+          if (fresh && fresh.ok) {
+            try {
+              const cache = await caches.open(CACHE)
+              cache.put('./index.html', fresh.clone())
+            } catch {
+              /* 克隆失败不影响返回 */
+            }
           }
           return fresh
         } catch {
-          return (
-            (await caches.match(req)) ||
-            (await caches.match('./index.html')) ||
-            (await caches.match('./')) ||
-            new Response('<h1>离线中</h1><p>天天还没缓存好这一页，联网打开一次即可离线游玩～</p>', {
-              headers: { 'Content-Type': 'text/html; charset=utf-8' },
-              status: 200
-            })
-          )
+          try {
+            return (
+              (await caches.match(req)) ||
+              (await caches.match('./index.html')) ||
+              (await caches.match('./')) ||
+              new Response('<h1>离线中</h1><p>天天还没缓存好这一页，联网打开一次即可离线游玩～</p>', {
+                headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                status: 200
+              })
+            )
+          } catch {
+            return new Response('', { status: 504, statusText: 'Offline' })
+          }
         }
       })()
     )
     return
   }
 
-  // 静态资源：缓存优先，未命中则网络并写缓存
+  // 静态资源：缓存优先，未命中则网络并写缓存；任何异常兜底，绝不 reject
   event.respondWith(
     (async () => {
-      const hit = await caches.match(req, { ignoreSearch: false })
-      if (hit) return hit
       try {
+        const hit = await caches.match(req)
+        if (hit) return hit
         const fresh = await fetch(req)
         if (fresh && fresh.ok) {
           try {
