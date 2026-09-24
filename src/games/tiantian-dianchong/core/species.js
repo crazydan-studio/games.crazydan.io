@@ -26,9 +26,10 @@ const EAR_STYLES = ['pointed', 'floppy', 'round', 'horn']
 const TAIL_STYLES = ['striped', 'wag', 'curly', 'spikes']
 const SNOUT_STYLES = ['cat', 'dog', 'pig', 'dino']
 const EXTRAS = ['whiskers', 'collar', 'tusks', 'back-spikes', 'none']
-// 3D 模型资产键：Babylon.js 版四内置物种使用 public/assets/b3d/ 的 Quaternius CC0 模型；
-// 自定义/AI 物种无预设模型，由 3D 播放器用「狐狸通用身体 + 物种配色漫反射染色」呈现
-const MODEL_ASSETS = ['fox', 'shibainu', 'pig', 'trex']
+// 3D 模型资产键：Babylon.js 版四内置物种使用 public/assets/b3d/ 的 CC0 模型；
+// 宠物建模 = Quaternius Ultimate Animated Animals，怪兽建模 = Quaternius Ultimate Monsters。
+// 不做建模回退：物种必须绑定白名单内的模型（含 AI 物种）
+const MODEL_ASSETS = ['fox', 'shibainu', 'alpaca', 'dragon']
 const pick = (v, list, fallback) => (list.includes(v) ? v : fallback)
 
 // ---- 内置物种 ----
@@ -105,11 +106,11 @@ export const BUILTIN_SPECIES = {
   },
   pig: {
     id: 'pig',
-    name: '猪猪',
-    emoji: '🐷',
+    name: '羊驼',
+    emoji: '🦙',
     builtin: true,
-    model: 'pig', // Quaternius Farm Animals Animated（CC0；动画仅 Idle/Jump，其余姿态程序化弥补）
-    intro: '憨憨的小猪，特别特别能吃，吃饱就心情超好，最大的梦想是睡到自然醒。',
+    model: 'alpaca', // Quaternius Ultimate Animated Animals（CC0，13 段骨骼动画）
+    intro: '毛茸茸的憨憨羊驼，特别特别能吃，吃饱就心情超好，最大的梦想是睡到自然醒。',
     personality: ['憨厚', '吃货', '心宽体胖'],
     traits: {
       metabolism: 1.8, // 最贪吃
@@ -125,26 +126,26 @@ export const BUILTIN_SPECIES = {
     schedule: { sleep: [[12, 15], [21, 7]] },
     behaviors: { idle: 0.8, wander: 0.7, sleep: 1.6, play: 0.9, beg: 1.3, groom: 0.7, stare: 0.8 },
     look: {
-      body: '#F9B6C0',
-      belly: '#FBDCE2',
-      accent: '#E88AA0',
+      body: '#6B4726',
+      belly: '#8A6136',
+      accent: '#3A2412',
       ear: 'round',
       tail: 'curly',
       snout: 'pig',
-      extra: 'tusks'
+      extra: 'none'
     },
     quips: [
-      '哼哼～', '肚子在唱歌。', '梦里全是好吃的。', '再睡五分钟……',
-      '零食！零食！！', '吃得好就是幸福。', '打个滚，尘土都香香的。'
+      '咴儿～', '肚子在唱歌。', '梦里全是好吃的。', '再睡五分钟……',
+      '零食！零食！！', '吃得好就是幸福。', '今天的毛梳得顺顺的。'
     ]
   },
   'dino-monster': {
     id: 'dino-monster',
-    name: '霸王龙',
-    emoji: '🦖',
+    name: '小飞龙',
+    emoji: '🐉',
     builtin: true,
-    model: 'trex', // Quaternius Animated LowPoly Dinosaurs（CC0，6 段骨骼动画）
-    intro: '来自远古电流的神秘霸王龙：长得飞快、夜里活跃，情绪上来会小小暴走，但它其实很温柔。',
+    model: 'dragon', // Quaternius Ultimate Monsters（CC0，8 段骨骼动画：点头/摇头语义直配）
+    intro: '来自远古电流的神秘小飞龙：长得飞快、夜里活跃，情绪上来会小小暴走，但它其实很温柔。',
     personality: ['神秘', '远古血脉', '温柔暴走'],
     traits: {
       metabolism: 1.5,
@@ -160,16 +161,16 @@ export const BUILTIN_SPECIES = {
     schedule: { sleep: [[6, 12]] }, // 夜行性：白天睡觉
     behaviors: { idle: 0.7, wander: 1.2, sleep: 0.8, play: 1.5, beg: 0.9, groom: 0.4, stare: 0.6 },
     look: {
-      body: '#58B368',
-      belly: '#F0DC8A',
-      accent: '#E88A3A',
+      body: '#7C6FD9',
+      belly: '#B8AFF0',
+      accent: '#4CC9F0',
       ear: 'horn',
       tail: 'spikes',
       snout: 'dino',
       extra: 'back-spikes'
     },
     quips: [
-      '嗷呜——', '远古的血液在沸腾。', '今晚的月亮看起来很肥。', '咔嚓咔嚓。',
+      '嗷呜——', '远古的血液在沸腾。', '今晚的月亮看起来很肥。', '扑棱扑棱～',
       '我在很久很久以前就认识你了。', '电波里全是我的低吼。'
     ]
   }
@@ -232,7 +233,7 @@ export function clampSpecies(raw) {
     extra: pick(raw.look?.extra, EXTRAS, 'none')
   }
 
-  // 3D 模型资产键：仅接受白名单（自定义/AI 物种缺省走「通用狐狸身体 + 染色」）
+  // 3D 模型资产键：仅接受白名单（无建模回退：AI/导入物种必须显式绑定白名单模型）
   const model = MODEL_ASSETS.includes(raw.model) ? raw.model : null
 
   const id = typeof raw.id === 'string' && /^[\w-]{1,32}$/.test(raw.id) ? raw.id : `custom-${Date.now()}`

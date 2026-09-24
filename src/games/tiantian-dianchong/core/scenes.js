@@ -10,17 +10,19 @@ const clamp01 = (v, fallback) => {
   return Math.min(1, Math.max(0, n))
 }
 
-// 装饰件白名单（SceneBackdrop 渲染模板）
+// 装饰件白名单（PROP_MODELS 有 GLB 的类型 + 程序化类型）
+// 室内道具 = KayKit Restaurant Bits（餐桌/餐椅/料理台/灶台/冰箱/菜单牌/食材箱/地面/墙窗）
 export const PROP_TYPES = [
   'cloud', 'tree', 'flower', 'butterfly', 'moon', 'star', 'cityline', 'fence',
-  'ball', 'bowl', 'lamp', 'window', 'rug', 'bed', 'sofa'
+  'ball', 'bowl', 'table', 'chair', 'counter', 'stove', 'fridge', 'menu', 'crate',
+  'floor', 'window'
 ]
 
 // ---- 内置场景 ----
 export const BUILTIN_SCENES = {
   'living-room': {
     id: 'living-room',
-    name: '温暖客厅',
+    name: '温馨餐厅',
     builtin: true,
     sky: ['#FFE9C8', '#FFD9A8'],
     ground: ['#E8B87F', '#D9A266'],
@@ -28,10 +30,12 @@ export const BUILTIN_SCENES = {
     night: false,
     props: [
       { type: 'window', x: 0.22, y: 0.3, s: 1 },
-      { type: 'sofa', x: 0.78, y: 0.62, s: 1 },
-      { type: 'lamp', x: 0.06, y: 0.45, s: 0.8 },
-      { type: 'rug', x: 0.5, y: 0.9, s: 1.2 },
-      { type: 'ball', x: 0.36, y: 0.86, s: 0.5 },
+      { type: 'floor', x: 0.5, y: 0.88, s: 1.2 },
+      { type: 'table', x: 0.5, y: 0.56, s: 1 },
+      { type: 'chair', x: 0.3, y: 0.68, s: 0.9 },
+      { type: 'chair', x: 0.7, y: 0.68, s: 1.1 },
+      { type: 'counter', x: 0.86, y: 0.42, s: 1 },
+      { type: 'menu', x: 0.1, y: 0.5, s: 1 },
       { type: 'bowl', x: 0.64, y: 0.92, s: 0.6 }
     ]
   },
@@ -56,7 +60,7 @@ export const BUILTIN_SCENES = {
   },
   bedroom: {
     id: 'bedroom',
-    name: '宠物卧室',
+    name: '深夜食堂',
     builtin: true,
     sky: ['#3E4A7A', '#2A3355'],
     ground: ['#8A6FB5', '#6E559B'],
@@ -67,9 +71,10 @@ export const BUILTIN_SCENES = {
       { type: 'star', x: 0.42, y: 0.08, s: 0.5 },
       { type: 'star', x: 0.7, y: 0.15, s: 0.7 },
       { type: 'moon', x: 0.85, y: 0.14, s: 0.9 },
-      { type: 'bed', x: 0.28, y: 0.72, s: 1 },
-      { type: 'lamp', x: 0.82, y: 0.5, s: 0.7 },
-      { type: 'rug', x: 0.55, y: 0.92, s: 1 }
+      { type: 'stove', x: 0.24, y: 0.5, s: 1 },
+      { type: 'fridge', x: 0.82, y: 0.48, s: 1 },
+      { type: 'table', x: 0.52, y: 0.72, s: 1 },
+      { type: 'crate', x: 0.12, y: 0.82, s: 1 }
     ]
   },
   rooftop: {

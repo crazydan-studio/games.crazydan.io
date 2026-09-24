@@ -223,7 +223,7 @@ function advanceHours(save, hours, rng = never) {
   const snack = makeSave('pig')
   snack.pet.mood = 50
   r = performAction(snack.pet, BUILTIN_SPECIES.pig, 'snack', snack.gameClock + 1)
-  ok(r.ok && snack.pet.mood > 50 + 10, '猪猪吃零食：心情按 snackLove 1.8 加成')
+  ok(r.ok && snack.pet.mood > 50 + 10, '羊驼吃零食：心情按 snackLove 1.8 加成')
 
   const sick = makeSave('cat')
   sick.pet.illness = { id: 'cold', name: '小感冒', since: 0 }
@@ -429,7 +429,7 @@ function advanceHours(save, hours, rng = never) {
 // ---------- 10. AI 物种 / 场景生成器 ----------
 {
   const speciesJson = JSON.stringify({
-    id: 'fire-fox', name: '火狐狸', emoji: '🦊', intro: '尾巴燃着暖火的小狐狸',
+    id: 'fire-fox', name: '火狐狸', emoji: '🦊', intro: '尾巴燃着暖火的小狐狸', model: 'fox',
     personality: ['热情', '怕水'],
     traits: { metabolism: 1.4, bathMood: -8 },
     look: { body: '#FF8C42', ear: 'pointed', tail: 'wag' },
@@ -505,7 +505,7 @@ function advanceHours(save, hours, rng = never) {
 
   // 物种设计 → species 分类
   const speciesJson = JSON.stringify({
-    id: 'fire-fox', name: '火狐狸', emoji: '🦊', intro: '尾巴燃着暖火的小狐狸',
+    id: 'fire-fox', name: '火狐狸', emoji: '🦊', intro: '尾巴燃着暖火的小狐狸', model: 'fox',
     personality: ['热情'], traits: { metabolism: 1.4 },
     look: { body: '#FF8C42', ear: 'pointed' }, quips: ['唔唔']
   })
@@ -857,7 +857,7 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
   ok(anchors.food === 64 && anchors.bed === undefined, '交互：客厅锚点只有食盆(64)')
   s.settings.sceneId = 'bedroom'
   anchors = sys.scene.anchors()
-  ok(anchors.bed === 28, '交互：卧室提供床铺锚点(28)')
+  ok(anchors.bed === undefined, '交互：深夜食堂无床铺（餐厅场景，睡觉原地躺卧）')
 
   // 用户操作：效果 + 指令 + 结果回调
   s.settings.sceneId = 'living-room'
@@ -885,7 +885,7 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
 
 // ---------- 16. Babylon 3D 资产：真实 GLB 解析 + 动画映射 + 动态锚点 ----------
 {
-  const { PET_MODELS, PROP_MODELS, THROW_ITEMS, GENERIC_PET_MODEL, modelKeyOf } = await import('../src/games/tiantian-dianchong/b3d/assets.js')
+  const { PET_MODELS, PROP_MODELS, THROW_ITEMS, modelKeyOf } = await import('../src/games/tiantian-dianchong/b3d/assets.js')
   const { resolveAnim, FAMILY_ANIMS, families } = await import('../src/games/tiantian-dianchong/b3d/animationMap.js')
   const { createInteractionSystem } = await import('../src/games/tiantian-dianchong/core/interactions.js')
   const { createCommandBus } = await import('../src/games/tiantian-dianchong/core/commands.js')
@@ -916,8 +916,9 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
   }
   ok(getSpecies('cat').model === 'fox', '物种：小狐狸使用 fox 模型（猫位）')
   ok(getSpecies('dog').model === 'shibainu', '物种：柴犬使用 shibainu 模型')
-  ok(getSpecies('pig').model === 'pig', '物种：猪猪使用 pig 模型')
-  ok(getSpecies('dino-monster').model === 'trex', '物种：霸王龙使用 trex 模型')
+  ok(getSpecies('pig').model === 'alpaca', '物种：羊驼使用 alpaca 模型（UAA）')
+  ok(getSpecies('dino-monster').model === 'dragon', '物种：小飞龙使用 dragon 模型（Ultimate Monsters）')
+  ok(getSpecies('pig').name === '羊驼' && getSpecies('dino-monster').name === '小飞龙', '物种：改名同步（猪猪→羊驼 / 霸王龙→小飞龙）')
 
   // ---- 宠物模型：文件存在 + 合法 GLB + 动画词汇与家族表一致 ----
   const actualFamilyAnims = {}
@@ -927,7 +928,7 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
     const info = glbAnimations(file)
     ok(info.animations.length >= 2, `宠物模型(${key})：含骨骼动画 ${info.animations.length} 段`)
     ok(info.skins >= 1, `宠物模型(${key})：含蒙皮骨架`)
-    ok(info.sizeKB <= 700, `宠物模型(${key})：体积合理（${info.sizeKB}KB ≤ 700KB）`)
+    ok(info.sizeKB <= 800, `宠物模型(${key})：体积合理（${info.sizeKB}KB ≤ 800KB）`)
     actualFamilyAnims[def.family] = info.animations
   }
 
@@ -940,8 +941,9 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
       `家族(${fam})：动画词汇表与 GLB 完全一致（${declared.length} 段）`
     )
   }
+  ok(families().join(',') === 'uaa,uaa2,monster', '家族：uaa / uaa2 / monster（farm/trex 已下线）')
 
-  // ---- 动作系统 17 个逻辑动画 × 三家族：全部可解析且解析名真实存在 ----
+  // ---- 动作系统 17 个逻辑动画 × 全家族：全部可解析且解析名真实存在 ----
   const LOGICAL = [...new Set(Object.values(ACTIONS).map((a) => a.anim))]
   for (const fam of families()) {
     const available = actualFamilyAnims[fam] || []
@@ -964,8 +966,11 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
   // 兜底链：动画全缺失时冻结但不抛错
   const frozen = resolveAnim('uaa', [], 'idle')
   ok(frozen.name === '' && frozen.rate === 0, '映射：无可用动画时冻结兜底')
-  const fallback = resolveAnim('trex', ['Armature|TRex_Idle'], 'dance-not-exist')
-  ok(fallback.name === 'Armature|TRex_Idle', '映射：未知逻辑动画回落家族 idle')
+  const fallback = resolveAnim('monster', ['Flying_Idle'], 'dance-not-exist')
+  ok(fallback.name === 'Flying_Idle', '映射：未知逻辑动画回落家族 idle')
+  // monster 家族语义直配：开心=点头 Yes / 难过=摇头 No
+  ok(resolveAnim('monster', FAMILY_ANIMS.monster, 'happy').name === 'Yes', '映射：小飞龙开心=点头(Yes)')
+  ok(resolveAnim('monster', FAMILY_ANIMS.monster, 'sad').name === 'No', '映射：小飞龙难过=摇头(No)')
 
   // ---- 场景道具与投掷道具：文件 + 合法 GLB ----
   for (const [type, def] of Object.entries(PROP_MODELS)) {
@@ -991,12 +996,15 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
     ok(Object.values(THROW_ITEMS).some((d) => d.action === act), `投掷道具：动作 ${act} 有对应道具`)
   }
 
-  // ---- 自定义/AI 物种：通用身体 + 染色 ----
-  const custom = clampSpecies({ id: 'fire-fox', name: '火狐狸', look: { body: '#FF8C42' } })
-  const mk = modelKeyOf(custom)
-  ok(mk.key === GENERIC_PET_MODEL && mk.tint === '#FF8C42', '模型解析：自定义物种回落通用身体 + 染色')
-  ok(modelKeyOf(getSpecies('cat')).tint === null, '模型解析：内置物种不带染色')
-  ok(clampSpecies({ id: 'x', model: 'hack' }).model === null, '模型解析：非法 model 被钳制')
+  // ---- 自定义/AI 物种：无建模回退（model 必须显式绑定白名单） ----
+  const custom = clampSpecies({ id: 'fire-fox', name: '火狐狸', model: 'dragon', look: { body: '#FF8C42' } })
+  ok(modelKeyOf(custom).key === 'dragon', '模型解析：AI 物种显式绑定 dragon 建模')
+  ok(modelKeyOf(getSpecies('cat')).key === 'fox', '模型解析：内置物种直接解析')
+  ok(clampSpecies({ id: 'x', model: 'hack' }).model === null, '模型解析：非法 model 被钳制为 null')
+  // 无建模回退：未绑定模型的物种在渲染层直接抛错（不静默替换）
+  let threw = false
+  try { modelKeyOf(clampSpecies({ id: 'y', name: '无建模' })) } catch { threw = true }
+  ok(threw, '模型解析：无 model 物种直接抛错（无通用身体回退）')
 
   // ---- 动态锚点（3D 投掷交互核心）：设置/覆写/清除/校验 ----
   const captured = []
@@ -1043,7 +1051,6 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
   // ---- 许可与归属文档 ----
   ok(fs.existsSync(`${ASSET_BASE}/ATTRIBUTION.md`), '3D 资产：ATTRIBUTION 归属文档存在')
   ok(fs.existsSync(`${ASSET_BASE}/LICENSE-Quaternius.txt`), '3D 资产：Quaternius CC0 许可文本')
-  ok(fs.existsSync(`${ASSET_BASE}/LICENSE-KayKit-FurnitureBits.txt`), '3D 资产：KayKit 家具许可文本')
   ok(fs.existsSync(`${ASSET_BASE}/LICENSE-KayKit-RestaurantBits.txt`), '3D 资产：KayKit 餐厅许可文本')
 
   // ---- SW 预缓存清单与实际文件一致 ----

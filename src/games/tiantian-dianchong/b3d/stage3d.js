@@ -114,13 +114,14 @@ export async function loadSceneProps(scene, sceneDef, parent, assetBase, shadowG
       inst.receiveShadows = true
       if (shadowGen) shadowGen.addShadowCaster(inst)
     }
-    // 位置：锚点类道具贴宠物行走线；墙面装饰靠墙；其余按 y 推深度
+    // 位置：锚点类道具贴宠物行走线；墙面装饰靠墙（Restaurant Bits 墙窗自地面立起）；
+    // yOff = 模型原点高度补偿（乘最终缩放，负值下沉）；其余按 y 推深度
     const s = Math.min(2, Math.max(0.4, Number(prop.s) || 1)) * (def.scale || 1)
     const wx = stageXToWorld(Number.isFinite(prop.x) ? prop.x * 100 : 50)
     let wz = -3.0 + (Number.isFinite(prop.y) ? prop.y : 0.5) * 3.4
-    let wy = 0
+    const wy = (def.yOff || 0) * s
     if (def.anchor) wz = PET_Z
-    if (def.wall) { wz = WALL_Z + 0.2; wy = 1.6 }
+    if (def.wall) wz = WALL_Z + 0.2
     node.position.set(wx, wy, wz)
     node.scaling.setAll(s)
     // 自然道具随机朝向（确定性黄金角）
@@ -129,7 +130,6 @@ export async function loadSceneProps(scene, sceneDef, parent, assetBase, shadowG
       natureIdx++
     }
     if (def.anchor && prop.type === 'bowl') anchors.food = node
-    if (def.anchor && prop.type === 'bed') anchors.bed = node
   }
   return anchors
 }

@@ -12,7 +12,7 @@
 
 // ---- 模型家族的动画词汇（与 GLB 内 AnimationGroup 名一致，单测对照真实资产校验） ----
 export const FAMILY_ANIMS = {
-  // Quaternius Ultimate Animated Animals（fox / shibainu）
+  // Quaternius Ultimate Animated Animals · 老骨架（fox / shibainu）
   uaa: [
     'AnimalArmature|Attack', 'AnimalArmature|Death', 'AnimalArmature|Eating',
     'AnimalArmature|Gallop', 'AnimalArmature|Gallop_Jump', 'AnimalArmature|Idle',
@@ -20,12 +20,18 @@ export const FAMILY_ANIMS = {
     'AnimalArmature|Idle_HitReact_Left', 'AnimalArmature|Idle_HitReact_Right',
     'AnimalArmature|Jump_ToIdle', 'AnimalArmature|Walk'
   ],
-  // Quaternius Farm Animals（pig，仅两段）
-  farm: ['Armature|Idle', 'Armature|Jump'],
-  // Quaternius Dinosaurs（trex）
-  trex: [
-    'Armature|TRex_Attack', 'Armature|TRex_Death', 'Armature|TRex_Idle',
-    'Armature|TRex_Jump', 'Armature|TRex_Run', 'Armature|TRex_Walk'
+  // Quaternius Ultimate Animated Animals · 新骨架（alpaca，官方 glTF 导出，13 段，无前缀）
+  uaa2: [
+    'Attack_Headbutt', 'Attack_Kick', 'Death',
+    'Eating', 'Gallop', 'Gallop_Jump',
+    'Idle', 'Idle_2', 'Idle_Headlow',
+    'Idle_HitReact1', 'Idle_HitReact2',
+    'Jump_toIdle', 'Walk'
+  ],
+  // Quaternius Ultimate Monsters · Flying（dragon）
+  // Death / Fast_Flying / Flying_Idle / Headbutt / HitReact / No / Punch / Yes
+  monster: [
+    'Death', 'Fast_Flying', 'Flying_Idle', 'Headbutt', 'HitReact', 'No', 'Punch', 'Yes'
   ]
 }
 
@@ -52,57 +58,58 @@ const FAMILY_MAPS = {
     coma: { name: 'AnimalArmature|Death', rate: 0.12, dim: 0.72, sink: 0.1 },
     dead: { name: 'AnimalArmature|Death', rate: 0.6, once: true, dim: 0.55, sink: 0.12 }
   },
-  farm: {
-    // 猪仅 Idle/Jump：行走=欢快蹦跳，睡觉=慢放+躺卧，进食=加速拱食
-    idle: { name: 'Armature|Idle' },
-    walk: { name: 'Armature|Jump', rate: 2.1 },
-    stare: { name: 'Armature|Idle', rate: 0.6 },
-    beg: { name: 'Armature|Jump', rate: 1.1 },
-    groom: { name: 'Armature|Idle', rate: 1.4 },
-    sleep: { name: 'Armature|Idle', rate: 0.3, lie: 82, sink: 0.18 },
-    wake: { name: 'Armature|Jump', rate: 0.8, once: true },
-    eat: { name: 'Armature|Idle', rate: 1.6, sink: 0.06 },
-    play: { name: 'Armature|Jump', rate: 1.35 },
-    wash: { name: 'Armature|Jump', rate: 1.8 },
-    medicine: { name: 'Armature|Idle', rate: 0.5 },
-    pet: { name: 'Armature|Jump', rate: 0.85 },
-    happy: { name: 'Armature|Jump', rate: 1.25 },
-    sad: { name: 'Armature|Idle', rate: 0.42 },
-    shiver: { name: 'Armature|Idle', rate: 2.2, jitter: 0.02 },
-    coma: { name: 'Armature|Idle', rate: 0.1, dim: 0.72, lie: 80, sink: 0.14 },
-    dead: { name: 'Armature|Idle', rate: 0, once: true, dim: 0.5, lie: 88, sink: 0.16 }
+  uaa2: {
+    // 新骨架 13 段（官方 glTF 导出，无 AnimalArmature 前缀）：攻击换 Headbutt/Kick
+    idle: { name: 'Idle' },
+    walk: { name: 'Walk' },
+    stare: { name: 'Idle_Headlow', rate: 0.7 },
+    beg: { name: 'Gallop_Jump', rate: 0.8 },
+    groom: { name: 'Idle_2', rate: 1.1 },
+    sleep: { name: 'Idle', rate: 0.32, lie: 78, sink: 0.16 },
+    wake: { name: 'Jump_toIdle', once: true },
+    eat: { name: 'Eating' },
+    play: { name: 'Attack_Headbutt', rate: 1.15 },
+    wash: { name: 'Idle_HitReact1', rate: 1.5 },
+    medicine: { name: 'Idle_Headlow', rate: 0.55 },
+    pet: { name: 'Gallop_Jump', rate: 0.9 },
+    happy: { name: 'Gallop_Jump', rate: 1.25 },
+    sad: { name: 'Idle_Headlow', rate: 0.5 },
+    shiver: { name: 'Idle_HitReact1', rate: 1.8, jitter: 0.022 },
+    coma: { name: 'Death', rate: 0.12, dim: 0.72, sink: 0.1 },
+    dead: { name: 'Death', rate: 0.6, once: true, dim: 0.55, sink: 0.12 }
   },
-  trex: {
-    idle: { name: 'Armature|TRex_Idle' },
-    walk: { name: 'Armature|TRex_Walk' },
-    stare: { name: 'Armature|TRex_Idle', rate: 0.55 },
-    beg: { name: 'Armature|TRex_Jump', rate: 0.8 },
-    groom: { name: 'Armature|TRex_Idle', rate: 1.3 },
-    sleep: { name: 'Armature|TRex_Idle', rate: 0.3, lie: 72, sink: 0.2 },
-    wake: { name: 'Armature|TRex_Jump', once: true },
-    eat: { name: 'Armature|TRex_Attack', rate: 0.8 },
-    play: { name: 'Armature|TRex_Attack', rate: 1.2 },
-    wash: { name: 'Armature|TRex_Jump', rate: 1.6 },
-    medicine: { name: 'Armature|TRex_Idle', rate: 0.5 },
-    pet: { name: 'Armature|TRex_Jump', rate: 0.75 },
-    happy: { name: 'Armature|TRex_Jump', rate: 1.15 },
-    sad: { name: 'Armature|TRex_Idle', rate: 0.4 },
-    shiver: { name: 'Armature|TRex_Idle', rate: 2.0, jitter: 0.025 },
-    coma: { name: 'Armature|TRex_Death', rate: 0.12, dim: 0.72, sink: 0.12 },
-    dead: { name: 'Armature|TRex_Death', rate: 0.5, once: true, dim: 0.55, sink: 0.14 }
+  monster: {
+    // 飞龙 8 段词汇：Yes/No 是点头/摇头 —— 语义直配 happy/sad/medicine
+    idle: { name: 'Flying_Idle' },
+    walk: { name: 'Fast_Flying' },
+    stare: { name: 'Flying_Idle', rate: 0.6 },
+    beg: { name: 'Yes', rate: 0.8 },
+    groom: { name: 'Flying_Idle', rate: 1.2 },
+    sleep: { name: 'Flying_Idle', rate: 0.3, lie: 75, sink: 0.15 },
+    wake: { name: 'HitReact', rate: 1.2 },
+    eat: { name: 'Headbutt', rate: 0.9 },
+    play: { name: 'Punch', rate: 1.15 },
+    wash: { name: 'HitReact', rate: 1.6 },
+    medicine: { name: 'No', rate: 0.5 },
+    pet: { name: 'Yes', rate: 0.85 },
+    happy: { name: 'Yes', rate: 1.3 },
+    sad: { name: 'No', rate: 0.45 },
+    shiver: { name: 'HitReact', rate: 1.9, jitter: 0.02 },
+    coma: { name: 'Death', rate: 0.12, dim: 0.72, sink: 0.12 },
+    dead: { name: 'Death', rate: 0.55, once: true, dim: 0.55, sink: 0.14 }
   }
 }
 
 // 兜底链：家族内逐级回退
 const FAMILY_FALLBACK = {
   uaa: ['AnimalArmature|Idle'],
-  farm: ['Armature|Idle'],
-  trex: ['Armature|TRex_Idle']
+  uaa2: ['Idle'],
+  monster: ['Flying_Idle']
 }
 
 /**
  * 解析逻辑动画（动作系统词汇）→ 实际动画 + 姿态配置
- * @param {string} family 模型家族（uaa / farm / trex）
+ * @param {string} family 模型家族（uaa / uaa2 / monster）
  * @param {string[]} available 该模型实际存在的动画名列表
  * @param {string} logical 逻辑动画名（ACTIONS.anim）
  * @returns {{ name, rate, once, lie, dim, jitter, sink }}

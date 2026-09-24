@@ -50,9 +50,11 @@
           · 优先级门禁：危急 > 玩家 > 生理节律 > 自发
           · 锚点接近：先走向食盆/床铺再执行
                       ▼
-          db/PetPlayer.js 骨骼动画渲染（PixiJS + DragonBones）
-          · 预设资产（猫/狗/恐龙）/ 程序化骨架（猪/AI 物种）
-          · WebGL 不可用 → 自动降级 SVG 宠物（PetAvatar）
+          b3d/PetPlayer3D.js 3D 渲染（Babylon.js）
+          · 宠物建模：Quaternius Ultimate Animated Animals
+          · 怪兽建模：Quaternius Ultimate Monsters
+          · 室内场景道具：KayKit Restaurant Bits
+          · 加载完毕前显示等待遮罩；失败显示错误遮罩（无降级）
 ```
 
 **指令协议**（`core/commands.js`）：`{ id, type: 'act'|'move', action|targetX, source, priority, reason }`；
@@ -96,7 +98,7 @@
 
 内置四个物种，**各自拥有不同的生命系统参数与行为模式**：
 
-| 参数 | 🐱 猫咪 | 🐶 狗狗 | 🐷 猪猪 | 🦖 恐龙怪兽 |
+| 参数 | 🦊 小狐狸 | 🐕 柴犬 | 🦙 羊驼 | 🐉 小飞龙 |
 | --- | --- | --- | --- | --- |
 | metabolism 饥饿速率 | 0.8（省粮） | 1.3（大胃口） | **1.8（贪吃）** | 1.5 |
 | illnessRate 生病率 | 0.7（皮实） | 0.9 | 1.1（易病） | 0.8 |
@@ -126,8 +128,8 @@
 
 ### 3.5 场景系统（core/scenes.js）
 
-- **当前仅内置 4 个场景**：客厅（默认）、草地公园、宠物卧室、星空露台 —— 均为参数化 SVG 数据（天空/地面渐变 + 装饰件组合），在设置中切换
-- **预留 AI 动态生成**：`generateSceneByAi()`（core/ai/scene.js）按场景 Schema（渐变色 + ≤8 个白名单装饰件：云/树/花/蝴蝶/月/星/城市剪影/栅栏/球/食盆/灯/窗/地毯/床/沙发）调用大模型生成新场景，存入本地场景库随存档导出
+- **当前仅内置 4 个场景**：温馨餐厅（默认，白天）、草地公园、深夜食堂（夜晚厨房）、星空露台 —— 室内场景道具来自 KayKit Restaurant Bits（餐桌/餐椅/料理台/灶台/冰箱/菜单牌/食材箱/厨房地砖/墙窗），在设置中切换
+- **预留 AI 动态生成**：`generateSceneByAi()`（core/ai/scene.js）按场景 Schema（渐变色 + ≤8 个白名单装饰件）调用大模型生成新场景，存入本地场景库随存档导出；白名单室外含云/树/花/蝴蝶/月/星/城市剪影/栅栏/球，室内含餐桌/餐椅/料理台/灶台/冰箱/菜单牌/食材箱/地砖/墙窗/食盆
 - 架构按 `sceneId → registry` 解析，内置与自定义同权；单宠物单场景渲染，多场景切换即换 `sceneId`
 
 ### 3.6 玩家操作与交互系统（core/actions.js + core/interactions.js）
@@ -173,8 +175,8 @@
 
 宠物与场景由 **Babylon.js Web 3D** 实时呈现（运行时 `@babylonjs/core` + `@babylonjs/loaders` 9.x，WebGL2）。模型资产全部来自两位 CC0 素材作者（来源与许可见 `assets/b3d/ATTRIBUTION.md`）：
 
-- **Quaternius（quaternius.com）**：小狐狸/柴犬（Ultimate Animated Animals，12 段骨骼动画含 Eating/Attack/Gallop/Jump）、霸王龙（Animated LowPoly Dinosaurs，6 段）、猪猪（Farm Animals Animated，2 段，姿态程序化弥补）、自然场景（树木/灌木/草/岩石）、玩具骨头与鸡腿（RPG Items）
-- **KayKit（kaylousberg.itch.io）**：室内家具（床/沙发/桌/椅/地毯/落地灯/书架/仙人掌，Furniture Bits）与食盆/食物道具（bowl/汉堡/胡萝卜/芝士，Restaurant Bits）
+- **Quaternius（quaternius.com）**：**宠物建模 = Ultimate Animated Animals**（小狐狸/柴犬 12 段骨骼动画含 Eating/Attack/Gallop/Jump，羊驼为官方 glTF 导出 13 段含 Headbutt/Kick）；**怪兽建模 = Ultimate Monsters**（小飞龙 8 段含 Yes/No 点头摇头语义直配）；自然场景（树木/灌木/草/岩石）、玩具骨头与鸡腿（RPG Items）
+- **KayKit（kaylousberg.itch.io/restaurant-bits）**：**室内场景全套 Restaurant Bits**（餐桌/餐椅/凳子/料理台/灶台/冰箱/菜单牌/食材箱/厨房地砖/墙窗）与食盆/食物道具（bowl/汉堡/胡萝卜/芝士）
 - **自定义/AI 物种**：无预设模型，用「通用狐狸身体 + `look.body` 染色」呈现，AI 新物种领养即刻 3D 化
 
 **游戏化交互（常见 3D 宠物游戏交互模式）**：
@@ -188,9 +190,9 @@
 
 | 模块 | 职责 |
 | --- | --- |
-| b3d/assets.js | 3D 资产清单（纯数据）：四宠物模型（family 决定动画词汇表）/场景道具（type 对齐 scenes.js 的 PROP_TYPES，anchor 类贴行走线）/投掷道具（kind=food/toy → action）；`modelKeyOf()` 物种→模型键（无预设回落通用身体+染色） |
-| b3d/animationMap.js | 动作→动画映射（纯逻辑）：三模型家族（uaa/farm/trex）词汇表与 GLB 实际动画名一致（单测对照真实文件校验）；17 个逻辑动画×三家族全部可解析；姿态变换 rate（睡眠慢放）/lie（侧卧角度）/dim（昏迷暗化）/jitter（寒颤）/sink（贴地下沉）弥补动画词汇缺口；兜底链→家族 idle→冻结 |
-| b3d/stage3d.js | 舞台搭建：地面/背景墙（室内场景）/昼夜光照（白天半球+定向阴影；夜晚压暗+暖点光+星月）/道具装载（0-1 屏幕坐标→世界坐标）/程序化装饰（栅栏/云朵/城市剪影/皮球）/爱心粒子纹理；`importGlb` 带缓存的资产导入 |
+| b3d/assets.js | 3D 资产清单（纯数据）：四宠物模型（family 决定动画词汇表）/场景道具（type 对齐 scenes.js 的 PROP_TYPES，anchor 类贴行走线，yOff 原点高度补偿）/投掷道具（kind=food/toy → action）；`modelKeyOf()` 物种→模型键**严格解析**（白名单外直接抛错，无通用身体回落） |
+| b3d/animationMap.js | 动作→动画映射（纯逻辑）：三模型家族（uaa 12 段 / uaa2 13 段 / monster 8 段）词汇表与 GLB 实际动画名一致（单测对照真实文件校验）；17 个逻辑动画×全家族全部可解析（monster 家族 Yes/No 点头摇头语义直配开心/难过）；姿态变换 rate（睡眠慢放）/lie（侧卧角度）/dim（昏迷暗化）/jitter（寒颤）/sink（贴地下沉）弥补动画词汇缺口；兜底链→家族 idle→冻结 |
+| b3d/stage3d.js | 舞台搭建：地面/背景墙（室内场景）/昼夜光照（白天半球+定向阴影；夜晚压暗+暖点光+星月）/道具装载（0-1 屏幕坐标→世界坐标，yOff 原点高度补偿）/程序化装饰（栅栏/云朵/城市剪影/皮球）/爱心粒子纹理；`importGlb` 带缓存的资产导入（渲染器销毁时随同清空，防跨 scene 克隆失联） |
 | b3d/PetPlayer3D.js | 3D 渲染器：接口契约与渲染层解耦（init/setSpecies/play/moveTo/start/...，App 只认这套）；宠物归一化缩放与贴地；骨骼-网格-动画组三同步克隆；自写「屏幕→世界」射线（宠物胶囊命中+地面求交）；投掷物理（抛物线+弹跳+摩擦+接近拾取）；`window.__b3dDebug` 调试钩子 |
 
 - **渲染管线**：Babylon Engine（WebGL2，DPR≤2 超采样）→ ArcRotateCamera（α=+π/2 玩家侧）→ 昼夜光照 + 阴影（DirectionalLight `autoUpdateExtends` 收敛视锥）→ 透明画布上叠 UI 覆盖层（气泡/胶囊/Zzz/道具坞）
@@ -202,7 +204,7 @@
   - **picking side-effect**：Babylon 9 深路径导入下 `scene.pick/createPickingRay` 的原型注册不稳定——自写逆投影射线（`camera.getTransformationMatrix().invert()`，**矩阵乘序为 view×proj**，反了会得到原点附近的假射线；dir 必须 normalize，否则点线距离公式失效→任何点击都命中宠物）
   - **场景重建**：换场景会 dispose 旧 ShadowGenerator——宠物 mesh `receiveShadows=false`（悬空 shadow map 引用会渲染成黑块），重建后重新 `addShadowCaster`；夜晚时段天空/雾同步压暗（避免白天色天空+黑暗宠物的割裂）
   - **SW 资产缓存**：资产文件变更必须 bump `CACHE` 版本号（v3 起），否则缓存优先进旧损坏文件
-- **降级链路**：WebGL 初始化失败 **或宠物模型加载失败**（资产缺失/损坏/断网首访）→ `bonesMode = false` → 模板渲染参数化 SVG 宠物（PetAvatar + SceneBackdrop），玩法完全不受影响
+- **无降级策略**：物种必须绑定 `PET_MODELS` 白名单建模（含 AI 物种，未指定直接拒收）；**加载完毕前 PetStage 显示等待遮罩**，WebGL 或指定建模加载失败时遮罩转为错误提示（提供刷新重试），绝不回退 SVG 或静默换模型
 - **指令→动画接线**（App.vue）：与 2D 版完全一致——动作系统生命周期事件 `action:start/end` → `player.play(anim, loop)`；`move:to` → 走行动画 + `moveTo(targetX)`；渲染层每帧回报位置与到达 → `updatePosition/arrived`；3D 交互事件（ground-click/item-landed/touch-pet）→ 指令总线/交互系统
 
 ## 4. AI 集成设计
@@ -245,7 +247,7 @@
 ## 5. UI 与视觉
 
 - 造型隐喻「**电子宠物机**」：上半是圆角「屏幕」（场景 + 骨骼动画画布 + 心声气泡），下半是实体感按键区（六个操作按钮），移动端单手可握
-- **3D 舞台（PetStage.vue + b3d/）**：Babylon.js 全屏感画布（3D 宠物 + 场景道具 + 投掷物理 + 相机控制），覆盖层为心声气泡/状态胶囊/道具坞/全屏按钮；WebGL 或模型加载失败时自动降级为参数化 SVG 宠物（PetAvatar + SceneBackdrop，玩法不变）
+- **3D 舞台（PetStage.vue + b3d/）**：Babylon.js 全屏感画布（3D 宠物 + 场景道具 + 投掷物理 + 相机控制），覆盖层为心声气泡/状态胶囊/道具坞/全屏按钮/**加载等待遮罩**；建模与场景加载完毕前遮罩常驻，失败转为错误遮罩（无 SVG 降级）
 - **道具坞（ItemDock.vue）**：底部悬浮道具条，按住拖出投掷（汉堡/胡萝卜/芝士/鸡腿/玩具骨头），对应照料操作冷却联动
 - 延续本站手绘暖感，但主色切换为「电光青绿」（`--primary: #26B99A`，底色薄荷奶油），与消消乐形成姊妹感
 - 领养页：四物种卡片（造型预览 + 特性摘要 + 性格标签）→ 取名（≤8 字）→ 开局
@@ -260,7 +262,7 @@ src/games/tiantian-dianchong/
 ├── main.js                     # Vue 挂载 + SW 注册
 ├── style.css                   # 游戏设计系统
 ├── App.vue                     # 编排：领养页 / 主界面 / 设置 / 三层系统接线
-├── components/                 # AdoptScreen / PetStage（3D 舞台 + 交互桥接）/ PetAvatar（SVG 降级）/
+├── components/                 # AdoptScreen / PetStage（3D 舞台 + 交互桥接 + 加载等待遮罩）/ PetAvatar（领养页 SVG 卡片预览）/
 │                               # SceneBackdrop / StatusPanel / ActionBar / LogPanel /
 │                               # ItemDock（投掷道具坞）/ SettingsModal / AiAuditPanel
 ├── core/                       # 纯逻辑（无 Vue 依赖，Node 可直接单测）
@@ -282,7 +284,7 @@ public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
 
 ## 7. 测试
 
-- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**360 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 零头折算 / 随机生命系统确定性 / 存档导入导出回环 / AI JSON 解析、端点兼容、超时中止、降级 / AI 物种与场景钳制 / 宠物间交互总线 / AI 调用审计（四类分类、密钥掩码、FIFO、导出、订阅、截断）/ 指令总线 / 动作系统（门禁/锚点/回落）/ 生命运行时 / 交互系统 / **Babylon 3D 资产（四物种模型绑定、GLB 真实解析（魔数/JSON chunk/蒙皮/体积）、家族动画词汇表与 GLB 完全一致、17 逻辑动画×三家族全解析+姿态语义、道具与投掷物文件+动作合法性、自定义物种染色回落、动态锚点（设置/覆写/清除/非法拒绝/覆写静态）、投掷食物链路（先移动后进食事件序）、许可文档、SW 预缓存清单与磁盘文件一致）**
+- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**369 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 零头折算 / 随机生命系统确定性 / 存档导入导出回环 / AI JSON 解析、端点兼容、超时中止、降级 / AI 物种与场景钳制（含 model 必填拒收）/ 宠物间交互总线 / AI 调用审计（四类分类、密钥掩码、FIFO、导出、订阅、截断）/ 指令总线 / 动作系统（门禁/锚点/回落）/ 生命运行时 / 交互系统 / **Babylon 3D 资产（四物种模型绑定、GLB 真实解析（魔数/JSON chunk/蒙皮/体积）、三家族动画词汇表与 GLB 完全一致、17 逻辑动画×全家族解析+姿态语义（monster Yes/No 语义直配）、道具与投掷物文件+动作合法性、无建模回退严格解析（无 model 物种抛错）、动态锚点（设置/覆写/清除/非法拒绝/覆写静态）、投掷食物链路（先移动后进食事件序）、许可文档、SW 预缓存清单与磁盘文件一致）**
 - agent-browser E2E（生产构建 + 静态托管）：门户卡片 → 领养四物种 → 领养狗狗「旺财」→ nl-hud 预置 → 1× 时间节奏（15 秒仅微量消耗）→ 喂食（+38 饱食、日志、气泡）→ 玩耍与摸头彩蛋 → 重新领养（confirm + 清档）→ 600× 流速与场景切换 → 导出存档（blob 完整、无密钥）→ 导入回环（改名换场景、历史保留）→ AI 配置保存（cfg/key 分离存储）→ mock LLM 验证 AI 智能体生命系统（chat/completions 调用 + AI 台词气泡）→ SW 注册 → 断网重载完整可玩 → 浏览器回退门户；全程零控制台错误
 - **3D E2E（Babylon.js 版，agent-browser + VLM 视觉审查）**：存档恢复→**小狐狸 3D 侧卧睡眠**（VLM 确认低模狐狸+家具+地毯完整，Zzz 气泡）→ **抚摸交互**（轻点狐狸→爱心粒子飘浮+心情气泡）→ **地面点击走位**（move 指令+Walk 动画）→ **投掷汉堡**（道具坞拖拽→抛物线弹跳→落地→动态锚点→走向落点→进食消失→饱食结算全链路）→ **投掷玩具骨头**（落地→宠物走向→到达自动「撒欢玩耍」结算→骨头拾取消失）→ 场景切换草地公园（栅栏/绿茵/夜空协调）→ 重新领养**霸王龙**（VLM：完整绿色霸王龙无缺陷）→ **猪猪**（粉色圆身无缺陷）→ **柴犬**（橙白配色无缺陷）→ **断网重载**（SW 缓存 3D 资产离线完整可玩+离线抚摸）→ 全程零控制台错误
 - 已知环境限制：headless 无 GPU 环境 Fullscreen API promise 不 resolve（真实浏览器正常，代码路径已验证）；软渲染帧率 ~6fps 属沙箱限制
@@ -304,4 +306,5 @@ public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
 - 宠物图鉴 / 成长相册 / 老年回忆录
 - 跨设备自动同步（WebDAV / 云盘直连导入导出）
 | 2026-09-23 | **骨骼动画迁移 PixiJS + DragonBones + 预设资产导入**：渲染运行时从 spine-webgl 4.3 换为 pixi.js 8.6 + pixi-dragonbones-runtime 8.0.3；**预设+程序化双轨**——全网检索导入猫/狗（chimple/bahama，MPL-2.0，53 骨骼/29 动画）与恐龙（DragonBonesJS 官方 dragon_boy，MIT，19 骨骼/4 动画）预设骨架，猪/AI 物种由 skeletonFactory 程序化生成 DragonBones 5.5 数据（中性时间线→拆分帧格式转换，坐标 y/rot 取负换向）；animationMap 动作→动画映射（walk→skating 滑板、medicine→drinking、pet→hifi、sleep→慢放+侧卧、dead→冻结+暗化；恐龙 walk/jump/fall 原生+朝向基准镜像）；SW 预缓存九件资产文件实现三物种离线。修复两处隐形 bug 根因：骨架与贴图集 JSON 同名致解析去重误跳过贴图集（插槽 1×1 空纹理）、程序化贴图集名与骨架名不一致致检索失败 |
+| 2026-09-24 | **建模与室内场景换源 + 无降级加载**：宠物建模统一为 Quaternius Ultimate Animated Animals（猪猪→羊驼 alpaca，官方 glTF 导出 13 段动画），怪兽建模换 Ultimate Monsters（霸王龙→小飞龙 dragon，8 段动画，Yes/No 点头摇头语义直配开心/难过）；室内场景全面换 KayKit Restaurant Bits（温暖客厅→温馨餐厅：餐桌/餐椅/料理台/菜单牌/地砖/墙窗；宠物卧室→深夜食堂：灶台/冰箱/食材箱）；**不做建模降级/回退**——删除 SVG 降级链路与通用狐狸身体+染色回落，物种必须绑定白名单建模（AI 物种未指定 model 直接拒收）；**加载完毕前显示等待遮罩**（转圈+文案），失败转为错误遮罩提供刷新重试；修复重新领养后道具消失（模块级 meshCache 跨 scene 克隆失联 → dispose 时随同清空）；SW v5；深坑注记：GitHub 镜像版 UAA 新骨架动物的动画目标是普通节点而非骨骼关节（克隆链驱动不了骨骼、模型压扁），必须用官方 Drive 的 Blender 导出版 |
 | 2026-09-24 | **重制为 Babylon.js Web 3D**：废弃 2D 骨骼动画方案（spine→DragonBones 两代），渲染层全面迁移 @babylonjs/core+loaders 9.x（WebGL2）；模型资产来自 Quaternius（小狐狸/柴犬/霸王龙/猪猪/自然/玩具）与 KayKit（家具/食盆/食物）两位 CC0 作者；**游戏化交互**——直接抚摸（爱心粒子）、道具坞拖拽投掷（抛物线+弹跳物理+动态锚点喂食/追玩）、地面点击行走、视角旋转缩放、全屏沉浸模式；PetPlayer3D 与动作系统接口契约保持不变（三层指令驱动架构零改动）；物种更名对齐 3D 资产（猫咪→小狐狸、狗狗→柴犬、恐龙怪兽→霸王龙）；修六个 3D 深坑：相机方位（alpha=+π/2）、幽灵原始模型（导入后禁用）、Babylon 9 事件属性（pi.event）与 TAP 不派发、picking side-effect 不稳定（自写逆投影射线+矩阵乘序+归一化）、场景重建 shadow map 悬空黑块、夜晚天空割裂；SW 预缓存 35 个 GLB（v3）离线可玩 |

@@ -15,7 +15,10 @@
 //   · 缓存清理只删本游戏 ttdc-cache-* 前缀，不再误删同源其他游戏（消消乐）缓存；
 //   · respondWith 全路径 try/catch 兜底：任何异常回落网络/504，绝不 reject；
 //   · 导航响应只有 fresh.ok 才写缓存，避免把 4xx/5xx 错误页污染离线兜底。
-const CACHE = 'ttdc-cache-v4'
+// v5：宠物建模换 Quaternius Ultimate Animated Animals（alpaca 替 pig）、
+//     怪兽建模换 Ultimate Monsters（dragon 替 trex）、室内场景换 KayKit
+//     Restaurant Bits（餐厅道具全套替 FurnitureBits 家具）
+const CACHE = 'ttdc-cache-v5'
 
 const CORE_ASSETS = [
   './',
@@ -26,21 +29,25 @@ const CORE_ASSETS = [
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   // Babylon.js 3D 资产（Quaternius + KayKit，CC0；许可与来源见 ATTRIBUTION.md）
+  // 宠物 = Ultimate Animated Animals；怪兽 = Ultimate Monsters；室内 = Restaurant Bits
   './assets/b3d/pets/fox.glb',
   './assets/b3d/pets/shibainu.glb',
-  './assets/b3d/pets/pig.glb',
-  './assets/b3d/pets/trex.glb',
-  './assets/b3d/home/bed_single_A.glb',
-  './assets/b3d/home/book_set.glb',
-  './assets/b3d/home/cactus_small_A.glb',
+  './assets/b3d/pets/alpaca.glb',
+  './assets/b3d/pets/dragon.glb',
   './assets/b3d/home/chair_A.glb',
-  './assets/b3d/home/couch.glb',
-  './assets/b3d/home/lamp_standing.glb',
-  './assets/b3d/home/pictureframe_small_A.glb',
-  './assets/b3d/home/rug_oval_A.glb',
-  './assets/b3d/home/shelf_B_small_decorated.glb',
-  './assets/b3d/home/table_medium.glb',
-  './assets/b3d/home/window.glb',
+  './assets/b3d/home/chair_B.glb',
+  './assets/b3d/home/chair_stool.glb',
+  './assets/b3d/home/crate_buns.glb',
+  './assets/b3d/home/crate_carrots.glb',
+  './assets/b3d/home/crate_cheese.glb',
+  './assets/b3d/home/floor_kitchen.glb',
+  './assets/b3d/home/fridge_A.glb',
+  './assets/b3d/home/kitchencounter_straight_A.glb',
+  './assets/b3d/home/menu.glb',
+  './assets/b3d/home/stove_single.glb',
+  './assets/b3d/home/table_round_A.glb',
+  './assets/b3d/home/table_round_B.glb',
+  './assets/b3d/home/wall_window_open.glb',
   './assets/b3d/nature/bush1.glb',
   './assets/b3d/nature/bush2.glb',
   './assets/b3d/nature/bush3.glb',
