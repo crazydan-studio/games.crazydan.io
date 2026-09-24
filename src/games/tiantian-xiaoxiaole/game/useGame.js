@@ -134,7 +134,9 @@ export function createGame(mode) {
     clearAllTimers()
   }
 
-  // ---------- 提示（闲置 5 秒自动亮起；可在设置中整体禁用） ----------
+  // ---------- 提示 ----------
+  // 手动提示（showHint）始终可用，不受设置影响；
+  // 设置 hint 仅控制「闲置 5 秒自动亮起」的自动提示
   function resetIdleTimer() {
     clearTimeout(idleTimer)
     hint.value = null

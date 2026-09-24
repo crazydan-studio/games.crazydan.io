@@ -115,15 +115,15 @@ function emitHint() {
 
         <div class="set-row">
           <div class="set-text">
-            <b>提示辅助</b>
-            <i>显示「提示」按钮，停顿时自动点亮可行一步</i>
+            <b>自动提示</b>
+            <i>停顿 5 秒后自动点亮可行的一步；「提示」按钮始终可用</i>
           </div>
           <button
             class="switch"
             :class="{ on: settings.hint }"
             role="switch"
             :aria-checked="settings.hint"
-            aria-label="提示辅助"
+            aria-label="自动提示"
             @click="updateSettings({ hint: !settings.hint })"
           >
             <i class="knob"></i>
