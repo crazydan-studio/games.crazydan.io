@@ -883,174 +883,184 @@ console.log(`\n全部 ${passed} 项断言通过 ✅`)
   ok(!pi.ok && /同伴/.test(pi.message), '交互：单宠物无法与同伴互动')
 }
 
-// ---------- 16. 骨骼动画资产：程序化 DragonBones 骨架与预设资产（真实运行时解析） ----------
+// ---------- 16. Babylon 3D 资产：真实 GLB 解析 + 动画映射 + 动态锚点 ----------
 {
-  const { PixiFactory } = await import('pixi-dragonbones-runtime')
-  const { buildPetDragonBones, RIG_BONES } = await import('../src/games/tiantian-dianchong/db/skeletonFactory.js')
-  const { ANIMATION_NAMES } = await import('../src/games/tiantian-dianchong/db/animations.js')
-  const { resolveAnim, ANIM_MAP } = await import('../src/games/tiantian-dianchong/db/animationMap.js')
-  const { DB_ASSETS } = await import('../src/games/tiantian-dianchong/db/assets.js')
+  const { PET_MODELS, PROP_MODELS, THROW_ITEMS, GENERIC_PET_MODEL, modelKeyOf } = await import('../src/games/tiantian-dianchong/b3d/assets.js')
+  const { resolveAnim, FAMILY_ANIMS, families } = await import('../src/games/tiantian-dianchong/b3d/animationMap.js')
+  const { createInteractionSystem } = await import('../src/games/tiantian-dianchong/core/interactions.js')
+  const { createCommandBus } = await import('../src/games/tiantian-dianchong/core/commands.js')
+  const { ACTIONS, ACTION_EVENT } = await import('../src/games/tiantian-dianchong/core/actionSystem.js')
   const fs = await import('node:fs')
 
-  // 四内置物种 + 两个 AI 风格自定义物种
-  const customLook = clampSpecies({
-    id: 'fire-fox', name: '火狐狸', look: { body: '#FF8C42', belly: '#FFE3C2', accent: '#D9552B', ear: 'pointed', tail: 'wag', snout: 'dog', extra: 'collar' }
-  })
-  const customLook2 = clampSpecies({
-    id: 'cloud-lamb', name: '云朵羊', look: { body: '#CFE4F5', belly: '#F4FAFF', accent: '#8FB6D9', ear: 'floppy', tail: 'curly', snout: 'pig', extra: 'whiskers' }
-  })
-  const all = [...speciesList(), customLook, customLook2]
+  const ASSET_BASE = 'public/tiantian-dianchong/assets/b3d'
 
-  for (const sp of all) {
-    const built = buildPetDragonBones(sp)
-    // 骨架 JSON 可被真实运行时解析（隐含校验：骨骼父子引用/插槽/皮肤显示/动画时间线）
-    const factory = PixiFactory.newInstance(false)
-    let data = null
-    let parseErr = null
-    try {
-      data = factory.parseDragonBonesData(built.skeleton)
-    } catch (e) {
-      parseErr = e
-    }
-    ok(!parseErr, `骨架(${sp.name})：真实 DragonBones 运行时解析通过${parseErr ? ' — ' + parseErr.message : ''}`)
-    if (!data) continue
-    const armData = data.getArmature(sp.id)
-    ok(!!armData, `骨架(${sp.name})：骨架数据可检索`)
-    ok(built.boneNames.length === RIG_BONES.length, `骨架(${sp.name})：骨骼数 ${built.boneNames.length}`)
-    ok(built.slotNames.length >= 19, `骨架(${sp.name})：插槽数 ${built.slotNames.length}`)
-    ok(built.skeleton.version === '5.5', `骨架(${sp.name})：数据版本 5.5`)
-    // 贴图集名与骨架同名（buildArmatureDisplay 按骨架名检索贴图集——历史隐形 bug 防线）
-    ok(built.textureAtlas.name === built.skeleton.name, `贴图集(${sp.name})：与骨架同名（检索键约定）`)
-    for (const name of ANIMATION_NAMES) {
-      ok(!!armData.getAnimation(name), `骨架(${sp.name})：动画「${name}」存在`)
-    }
-
-    // 贴图集：SubTexture 与皮肤显示引用一一对应
-    const texNames = new Set(built.textureAtlas.SubTexture.map((s) => s.name))
-    const missing = []
-    for (const s of built.skeleton.armature[0].skin[0].slot) {
-      for (const d of s.display) {
-        if (d && !texNames.has(d.path)) missing.push(`${s.name}/${d.path}`)
-      }
-    }
-    ok(missing.length === 0, `贴图集(${sp.name})：皮肤显示引用全部有图${missing.length ? ' — 缺 ' + missing.join(',') : ''}`)
-    ok(built.textureAtlas.width === 1024 && built.textureAtlas.height === 768, `贴图集(${sp.name})：页面尺寸正确`)
-    ok(built.textureAtlas.SubTexture.length >= 26, `贴图集(${sp.name})：部件数 ≥26（实际 ${built.textureAtlas.SubTexture.length}）`)
-
-    // 动画结构校验：帧时长累进 = 动画总时长；循环动画有回环闭合帧
-    for (const anim of built.skeleton.armature[0].animation) {
-      let sum = 0
-      let hasClosure = false
-      for (const b of anim.bone || []) {
-        for (const key of ['translateFrame', 'rotateFrame', 'scaleFrame']) {
-          if (!b[key]) continue
-          sum = Math.max(sum, b[key].reduce((s, f) => s + f.duration, 0))
-          if (b[key].at(-1).duration === 0) hasClosure = true
-        }
-      }
-      for (const s of anim.slot || []) {
-        sum = Math.max(sum, s.displayFrame.reduce((s2, f) => s2 + f.duration, 0))
-        if (s.displayFrame.at(-1).duration === 0) hasClosure = true
-      }
-      ok(sum === anim.duration, `动画(${sp.name}/${anim.name})：帧时长总和 ${sum} = duration ${anim.duration}`)
-      const isLoop = ['idle', 'walk', 'stare', 'sleep', 'sad', 'coma', 'dead'].includes(anim.name)
-      ok(!isLoop || hasClosure, `动画(${sp.name}/${anim.name})：循环动画带回环闭合帧`)
-      // displayFrame 的 value 必须在合法区间（-1 ≤ v < 显示数）
-      for (const s of anim.slot || []) {
-        const count = built.skeleton.armature[0].skin[0].slot.find((x) => x.name === s.name).display.length
-        const bad = s.displayFrame.some((f) => f.value < -1 || f.value >= count)
-        ok(!bad, `动画(${sp.name}/${anim.name})：插槽 ${s.name} 显示下标合法`)
-      }
-    }
-
-    // 物种 rig 字段（预设资产键）合法性
-    ok(!sp.builtin || ['cat', 'dog', 'dino'].includes(sp.rig) || sp.rig === undefined, `物种(${sp.name})：rig 标记合法`)
-    ok(sp.builtin ? !!sp.rig || sp.id === 'pig' : sp.rig === null, `物种(${sp.name})：预设物种有 rig / 自定义物种无`)
-  }
-
-  // 物种特质 → 动画风格差异（呼吸幅度/尾巴摆幅）
-  const cat = getSpecies('cat')
-  const dino = getSpecies('dino-monster')
-  const catBuilt = buildPetDragonBones(cat)
-  const dinoBuilt = buildPetDragonBones(dino)
-  const catScale = catBuilt.skeleton.armature[0].animation.find((a) => a.name === 'idle').bone
-    .find((b) => b.name === 'body').scaleFrame
-  const dinoScale = dinoBuilt.skeleton.armature[0].animation.find((a) => a.name === 'idle').bone
-    .find((b) => b.name === 'body').scaleFrame
-  const catBreath = catScale[1].y - 1
-  const dinoBreath = dinoScale[1].y - 1
-  ok(dinoBreath > catBreath, '动画：恐龙(代谢1.5)呼吸幅度大于猫咪(0.8)')
-  const catRot = catBuilt.skeleton.armature[0].animation.find((a) => a.name === 'idle').bone
-    .find((b) => b.name === 'tail-1').rotateFrame
-  const dinoRot = dinoBuilt.skeleton.armature[0].animation.find((a) => a.name === 'idle').bone
-    .find((b) => b.name === 'tail-1').rotateFrame
-  ok(Math.abs(dinoRot[1].rotate) > Math.abs(catRot[1].rotate), '动画：恐龙(情绪1.5)摆尾幅度大于猫咪(1.15)')
-
-  // 循环动画回环帧与首帧对齐（无缝循环）
-  const pigBuilt = buildPetDragonBones(getSpecies('pig'))
-  const pigIdle = pigBuilt.skeleton.armature[0].animation.find((a) => a.name === 'idle')
-  const pigBodyScale = pigIdle.bone.find((b) => b.name === 'body').scaleFrame
-  const closure = pigBodyScale.at(-1)
-  ok(closure.duration === 0 && closure.y === pigBodyScale[0].y, '动画：循环动画回环帧对齐首帧')
-
-  // 卷尾物种：tail-2 插槽显示列表为空占位（不可见骨骼仍可被动画驱动）
-  const pigSkinSlot = pigBuilt.skeleton.armature[0].skin[0].slot.find((x) => x.name === 'tail-2')
-  ok(pigSkinSlot.display.every((d) => d === null), '骨架：卷尾物种尾梢插槽为空显示')
-  const pigWalkBones = Object.fromEntries(pigBuilt.skeleton.armature[0].animation.find((a) => a.name === 'walk').bone.map((b) => [b.name, b]))
-  ok('tail-2' in pigWalkBones, '骨架：卷尾物种尾梢骨骼仍受动画驱动')
-
-  // ---- 动画映射解析 ----
-  const catAnims = ['idle', 'skating', 'talking', 'collecting', 'blowing', 'eating', 'popup', 'dance',
-    'face_happy', 'drinking', 'hifi', 'joy', 'sad', 'laugh', 'jumping', 'throw', 'transform']
-  ok(resolveAnim('cat', catAnims, 'walk').name === 'skating', '映射：猫 walk → skating（滑板）')
-  ok(resolveAnim('cat', catAnims, 'medicine').name === 'drinking', '映射：猫 medicine → drinking（喝药）')
-  ok(resolveAnim('cat', catAnims, 'sleep').lie === 82 && resolveAnim('cat', catAnims, 'sleep').rate === 0.42, '映射：猫 sleep → 慢放 + 侧卧')
-  ok(resolveAnim('cat', catAnims, 'dead').once === true && resolveAnim('cat', catAnims, 'dead').dim === 0.5, '映射：猫 dead → 冻结 + 暗化 + 单次')
-  const dinoAnims = ['stand', 'walk', 'jump', 'fall']
-  ok(resolveAnim('dino', dinoAnims, 'walk').name === 'walk', '映射：恐龙 walk → walk（原生行走）')
-  ok(resolveAnim('dino', dinoAnims, 'sleep').name === 'fall' && resolveAnim('dino', dinoAnims, 'sleep').once === true, '映射：恐龙 sleep → fall 单次倒卧')
-  // 兜底链：缺失映射回落可用动画
-  ok(resolveAnim('cat', catAnims, 'wash').name === 'face_happy', '映射：猫 wash → face_happy')
-  ok(resolveAnim('dino', dinoAnims, 'eat').name === 'jump', '映射：恐龙 eat → jump 兜底')
-  ok(resolveAnim('cat', ['foo', 'bar'], 'idle').name === 'foo', '映射：未知动画回落首动画')
-  // 程序化骨架：恒等映射
-  ok(resolveAnim('procedural', ANIMATION_NAMES, 'medicine').name === 'medicine', '映射：程序化骨架恒等')
-
-  // ---- 预设资产（public 目录）结构校验 + 真实运行时解析 ----
-  for (const [key, def] of Object.entries(DB_ASSETS)) {
-    const base = `public/tiantian-dianchong/assets/db/${key}`
-    const skePath = `${base}/${def.ske}`
-    const texPath = `${base}/${def.tex}`
-    const pngPath = `${base}/${def.png}`
-    ok(fs.existsSync(skePath) && fs.existsSync(texPath) && fs.existsSync(pngPath), `预设资产(${key})：三件套文件齐全`)
-    const skeJson = JSON.parse(fs.readFileSync(skePath, 'utf8'))
-    const texJson = JSON.parse(fs.readFileSync(texPath, 'utf8'))
-    ok(skeJson.armature?.length >= 1 && skeJson.armature[0].name === def.armature, `预设资产(${key})：骨架名 ${def.armature} 正确`)
-    ok(texJson.imagePath === def.png, `预设资产(${key})：贴图集引用正确`)
-    ok(texJson.name === skeJson.name, `预设资产(${key})：贴图集与骨架同名（运行时检索键约定）`)
-    const factory = PixiFactory.newInstance(false)
-    let presetErr = null
-    try {
-      const data = factory.parseDragonBonesData(skeJson)
-      ok(!!data.getArmature(def.armature), `预设资产(${key})：运行时解析通过`)
-      const anims = Object.keys(data.getArmature(def.armature).animations)
-      ok(anims.length >= 4, `预设资产(${key})：动画数 ${anims.length} ≥ 4`)
-    } catch (e) {
-      presetErr = e
-    }
-    ok(!presetErr, `预设资产(${key})：解析无异常${presetErr ? ' — ' + presetErr.message : ''}`)
-    // 许可文件存在
-    ok(fs.existsSync(`${base}/LICENSE.txt`), `预设资产(${key})：许可文件随资产分发`)
-    // 动画映射表覆盖预设资产的可用动画（每个逻辑动画解析出实际存在的名字）
-    const available = skeJson.armature[0].animation.map((a) => a.name)
-    for (const logical of ANIMATION_NAMES) {
-      const r = resolveAnim(key, available, logical)
-      ok(!!r.name, `映射(${key}/${logical})：可解析 → ${r.name}`)
+  // GLB JSON chunk 解析（与浏览器加载同一数据源，真实校验动画词汇）
+  function glbAnimations(file) {
+    const buf = fs.readFileSync(file)
+    assert.equal(buf.readUInt32BE(0), 0x676c5446, `${file} 魔数`) // 'glTF'
+    const jsonLen = buf.readUInt32LE(12)
+    assert.equal(buf.readUInt32LE(16), 0x4e4f534a, `${file} 首块为 JSON`)
+    const json = JSON.parse(buf.slice(20, 20 + jsonLen).toString('utf8'))
+    return {
+      animations: (json.animations || []).map((a) => a.name || '(unnamed)'),
+      meshes: (json.meshes || []).length,
+      skins: (json.skins || []).length,
+      sizeKB: Math.round(buf.length / 1024)
     }
   }
 
-  // 资产许可归属文件
-  ok(fs.existsSync('public/tiantian-dianchong/assets/db/ATTRIBUTION.md'), '预设资产：ATTRIBUTION 归属文档存在')
+  // ---- 四内置物种 → 3D 模型资产 ----
+  for (const sp of speciesList()) {
+    if (!sp.builtin) continue
+    ok(!!sp.model && PET_MODELS[sp.model], `物种(${sp.name})：绑定 3D 模型 ${sp.model}`)
+  }
+  ok(getSpecies('cat').model === 'fox', '物种：小狐狸使用 fox 模型（猫位）')
+  ok(getSpecies('dog').model === 'shibainu', '物种：柴犬使用 shibainu 模型')
+  ok(getSpecies('pig').model === 'pig', '物种：猪猪使用 pig 模型')
+  ok(getSpecies('dino-monster').model === 'trex', '物种：霸王龙使用 trex 模型')
+
+  // ---- 宠物模型：文件存在 + 合法 GLB + 动画词汇与家族表一致 ----
+  const actualFamilyAnims = {}
+  for (const [key, def] of Object.entries(PET_MODELS)) {
+    const file = `${ASSET_BASE}/${def.file}`
+    ok(fs.existsSync(file), `宠物模型(${key})：文件存在 ${def.file}`)
+    const info = glbAnimations(file)
+    ok(info.animations.length >= 2, `宠物模型(${key})：含骨骼动画 ${info.animations.length} 段`)
+    ok(info.skins >= 1, `宠物模型(${key})：含蒙皮骨架`)
+    ok(info.sizeKB <= 700, `宠物模型(${key})：体积合理（${info.sizeKB}KB ≤ 700KB）`)
+    actualFamilyAnims[def.family] = info.animations
+  }
+
+  // 家族动画表（animationMap.FAMILY_ANIMS）与真实 GLB 动画名完全一致
+  for (const fam of families()) {
+    const actual = (actualFamilyAnims[fam] || []).sort()
+    const declared = [...FAMILY_ANIMS[fam]].sort()
+    ok(
+      actual.length === declared.length && actual.every((n, i) => n === declared[i]),
+      `家族(${fam})：动画词汇表与 GLB 完全一致（${declared.length} 段）`
+    )
+  }
+
+  // ---- 动作系统 17 个逻辑动画 × 三家族：全部可解析且解析名真实存在 ----
+  const LOGICAL = [...new Set(Object.values(ACTIONS).map((a) => a.anim))]
+  for (const fam of families()) {
+    const available = actualFamilyAnims[fam] || []
+    for (const logical of LOGICAL) {
+      const r = resolveAnim(fam, available, logical)
+      ok(!!r.name && available.includes(r.name), `映射(${fam}/${logical})：解析 → ${r.name}`)
+    }
+    // 姿态语义：睡眠=慢放+躺卧；死亡=暗化；寒颤=抖动；昏迷=暗化
+    const sleep = resolveAnim(fam, available, 'sleep')
+    ok(sleep.rate <= 0.35 && sleep.lie >= 70, `姿态(${fam}/sleep)：慢放 ${sleep.rate} + 躺卧 ${sleep.lie}°`)
+    const dead = resolveAnim(fam, available, 'dead')
+    ok(dead.dim < 1, `姿态(${fam}/dead)：暗化 ${dead.dim}`)
+    const coma = resolveAnim(fam, available, 'coma')
+    ok(coma.dim < 1 && coma.rate <= 0.2, `姿态(${fam}/coma)：暗化 ${coma.dim} + 极慢 ${coma.rate}`)
+    const shiver = resolveAnim(fam, available, 'shiver')
+    ok(shiver.jitter > 0, `姿态(${fam}/shiver)：位移抖动 ${shiver.jitter}`)
+    const eat = resolveAnim(fam, available, 'eat')
+    ok(!!eat.name, `姿态(${fam}/eat)：进食动画 ${eat.name}`)
+  }
+  // 兜底链：动画全缺失时冻结但不抛错
+  const frozen = resolveAnim('uaa', [], 'idle')
+  ok(frozen.name === '' && frozen.rate === 0, '映射：无可用动画时冻结兜底')
+  const fallback = resolveAnim('trex', ['Armature|TRex_Idle'], 'dance-not-exist')
+  ok(fallback.name === 'Armature|TRex_Idle', '映射：未知逻辑动画回落家族 idle')
+
+  // ---- 场景道具与投掷道具：文件 + 合法 GLB ----
+  for (const [type, def] of Object.entries(PROP_MODELS)) {
+    const file = `${ASSET_BASE}/${def.file}`
+    ok(fs.existsSync(file), `场景道具(${type})：文件存在 ${def.file}`)
+    glbAnimations(file)
+    for (const v of def.variants || []) {
+      ok(fs.existsSync(`${ASSET_BASE}/${v}`), `场景道具(${type})：变体 ${v} 存在`)
+      glbAnimations(`${ASSET_BASE}/${v}`)
+    }
+  }
+  const ITEM_ACTIONS = new Set(['feed', 'snack', 'play'])
+  for (const [id, def] of Object.entries(THROW_ITEMS)) {
+    const file = `${ASSET_BASE}/${def.file}`
+    ok(fs.existsSync(file), `投掷道具(${id})：文件存在 ${def.file}`)
+    glbAnimations(file)
+    ok(ITEM_ACTIONS.has(def.action), `投掷道具(${id})：动作 ${def.action} 合法`)
+    ok(['food', 'toy'].includes(def.kind), `投掷道具(${id})：类型 ${def.kind} 合法`)
+    ok(def.scale > 0.2 && def.scale < 1.2, `投掷道具(${id})：缩放 ${def.scale} 合理`)
+  }
+  // 每种投喂/玩耍动作至少有一件道具
+  for (const act of ['feed', 'snack', 'play']) {
+    ok(Object.values(THROW_ITEMS).some((d) => d.action === act), `投掷道具：动作 ${act} 有对应道具`)
+  }
+
+  // ---- 自定义/AI 物种：通用身体 + 染色 ----
+  const custom = clampSpecies({ id: 'fire-fox', name: '火狐狸', look: { body: '#FF8C42' } })
+  const mk = modelKeyOf(custom)
+  ok(mk.key === GENERIC_PET_MODEL && mk.tint === '#FF8C42', '模型解析：自定义物种回落通用身体 + 染色')
+  ok(modelKeyOf(getSpecies('cat')).tint === null, '模型解析：内置物种不带染色')
+  ok(clampSpecies({ id: 'x', model: 'hack' }).model === null, '模型解析：非法 model 被钳制')
+
+  // ---- 动态锚点（3D 投掷交互核心）：设置/覆写/清除/校验 ----
+  const captured = []
+  const bus = createCommandBus({ onDispatch: (cmd) => { captured.push(cmd); return { ok: true } } })
+  let s = makeSave('cat')
+  s.settings.sceneId = 'meadow' // 草地无食盆 → 静态锚点为空
+  const sys = createInteractionSystem({ bus, getSave: () => s, getSpecies: () => getSpecies('cat') })
+  ok(sys.scene.anchors().food === undefined, '锚点：草地无静态食盆')
+  ok(sys.scene.setDynamicAnchor('food', 42), '锚点：设置动态食盆(42)')
+  ok(sys.scene.anchors().food === 42, '锚点：动态锚点生效')
+  sys.scene.setDynamicAnchor('food', 73.26)
+  ok(sys.scene.anchors().food === 73.3, '锚点：动态锚点覆写 + 一位小数规整')
+  sys.scene.clearDynamicAnchor('food')
+  ok(sys.scene.anchors().food === undefined, '锚点：清除动态锚点')
+  ok(!sys.scene.setDynamicAnchor('food', 'abc') && !sys.scene.setDynamicAnchor('', 10) && !sys.scene.setDynamicAnchor('food', 120), '锚点：非法输入被拒绝')
+  // 场景切换后动态锚点保留（投掷跨场景场景一致性）
+  sys.scene.setDynamicAnchor('food', 15)
+  s.settings.sceneId = 'living-room' // 客厅静态食盆 64
+  ok(sys.scene.anchors().food === 15, '锚点：动态覆写静态（投喂落点优先）')
+  sys.scene.clearDynamicAnchor()
+  ok(sys.scene.anchors().food === 64, '锚点：清除后恢复静态')
+
+  // ---- 投掷食物链路：动态锚点 → eat 动作先接近再执行 ----
+  sys.scene.setDynamicAnchor('food', 20)
+  const as = (await import('../src/games/tiantian-dianchong/core/actionSystem.js')).createActionSystem({
+    anchors: () => sys.scene.anchors(),
+    onEvent: (ev) => { if (ev.type === ACTION_EVENT.START || ev.type === ACTION_EVENT.MOVE) captured.push({ ...ev }) },
+    now: () => 0
+  })
+  const verdict = as.handleCommand({ id: 'c1', type: 'act', action: 'eat', source: 'user', priority: 10, at: 0 })
+  ok(verdict.ok, '投喂链路：eat 指令被接受')
+  // 未就位（x=50 距 20 过远）→ 先派移动（目标=动态锚点），eat 尚未开始
+  const moveEv = captured.find((c) => c.type === ACTION_EVENT.MOVE)
+  ok(!!moveEv && moveEv.targetX === 20, '投喂链路：先走向动态食盆（targetX=20）')
+  ok(!captured.some((c) => c.type === ACTION_EVENT.START && c.action === 'eat'), '投喂链路：未就位前不播进食动画')
+  ok(as.snapshot().phase === 'moving', '投喂链路：动作系统处于移动阶段')
+  // 渲染层回报到达 → 正式开始进食（START 事件带 eat 动画）
+  as.updatePosition(20, -1)
+  as.arrived()
+  const startEv = captured.find((c) => c.type === ACTION_EVENT.START && c.action === 'eat')
+  ok(!!startEv && startEv.anim === 'eat', '投喂链路：就位后 eat 动作事件（动画 eat）')
+  ok(as.snapshot().phase === 'acting', '投喂链路：就位后开始进食')
+
+  // ---- 许可与归属文档 ----
+  ok(fs.existsSync(`${ASSET_BASE}/ATTRIBUTION.md`), '3D 资产：ATTRIBUTION 归属文档存在')
+  ok(fs.existsSync(`${ASSET_BASE}/LICENSE-Quaternius.txt`), '3D 资产：Quaternius CC0 许可文本')
+  ok(fs.existsSync(`${ASSET_BASE}/LICENSE-KayKit-FurnitureBits.txt`), '3D 资产：KayKit 家具许可文本')
+  ok(fs.existsSync(`${ASSET_BASE}/LICENSE-KayKit-RestaurantBits.txt`), '3D 资产：KayKit 餐厅许可文本')
+
+  // ---- SW 预缓存清单与实际文件一致 ----
+  const sw = fs.readFileSync('public/tiantian-dianchong/sw.js', 'utf8')
+  const precacheList = [...sw.matchAll(/'\.(\/assets\/b3d\/[^']+)'/g)].map((m) => m[1])
+  const diskFiles = []
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = `${dir}/${e.name}`
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith('.glb')) diskFiles.push(p.replace('public/tiantian-dianchong', ''))
+    }
+  }
+  walk('public/tiantian-dianchong/assets/b3d')
+  ok(precacheList.length === diskFiles.length, `SW 预缓存：${diskFiles.length} 个 GLB 全部登记（实际 ${precacheList.length}）`)
+  const missing = diskFiles.filter((f) => !precacheList.includes(f))
+  ok(missing.length === 0, `SW 预缓存：无遗漏${missing.length ? ' — 缺 ' + missing.join(',') : ''}`)
 }
 
 console.log(`\n全部 ${passed} 项断言通过 ✅`)

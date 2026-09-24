@@ -1,11 +1,13 @@
 <script setup>
-// ============ 舞台：电子宠物机的「屏幕」 ============
-// 场景背景 + 骨骼动画画布（PixiJS + DragonBones）+ 心声气泡 + 状态胶囊 + Zzz/病标。
-// WebGL 不可用时自动降级为参数化 SVG 宠物（PetAvatar），玩法不受影响。
+// ============ 舞台：3D 电宠的「游乐场」 ============
+// Babylon.js 3D 画布（宠物模型 + 场景道具 + 投掷物理）+ 心声气泡 + 状态胶囊 +
+// Zzz/病标 + 道具坞（拖拽投掷）+ 全屏按钮。
+// WebGL 不可用时自动降级为参数化 SVG 宠物（PetAvatar + SceneBackdrop），玩法不受影响。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SceneBackdrop from './SceneBackdrop.vue'
 import PetAvatar from './PetAvatar.vue'
-import { createDbPetPlayer } from '../db/PetPlayer.js'
+import ItemDock from './ItemDock.vue'
+import { createB3dPetPlayer } from '../b3d/PetPlayer3D.js'
 
 const props = defineProps({
   scene: { type: Object, required: true },
@@ -21,14 +23,18 @@ const props = defineProps({
   risk: { type: String, default: 'ok' },
   bubble: { type: Object, default: null }, // { text, ai }
   clockText: { type: String, default: '' },
-  petName: { type: String, default: '' }
+  petName: { type: String, default: '' },
+  fullscreen: { type: Boolean, default: false },
+  cooldowns: { type: Object, default: () => ({}) } // 投掷道具对应操作的冷却
 })
 
-const emit = defineEmits(['touch-pet', 'bones-ready'])
+const emit = defineEmits([
+  'touch-pet', 'bones-ready', 'ground-click', 'item-landed', 'toggle-fullscreen'
+])
 
 const canvasEl = ref(null)
 const bonesMode = ref(false)
-const player = createDbPetPlayer()
+const player = createB3dPetPlayer()
 let resizeObserver = null
 
 const chips = computed(() => {
@@ -43,19 +49,36 @@ const chips = computed(() => {
 
 onMounted(async () => {
   // 画布常驻渲染（透明画布在 WebGL 失败时本就不可见，避免 v-show 隐藏导致初始尺寸为 0）
-  const ok = await player.init(canvasEl.value)
+  let ok = false
+  try {
+    ok = await player.init(canvasEl.value)
+    if (ok) {
+      // 3D 交互桥接：轻点宠物=抚摸 / 轻点地面=走过去 / 投掷物落地=喂食或玩耍
+      player.setInteractHandlers({
+        onPetTouch: () => emit('touch-pet'),
+        onGroundClick: (x) => emit('ground-click', x),
+        onItemLanded: (info) => emit('item-landed', info)
+      })
+      // 宠物模型加载失败（资产缺失/损坏/断网首访）→ 整体降级 SVG，玩法不受影响
+      ok = await player.setSpecies(props.species)
+    }
+  } catch (e) {
+    console.warn('[dianchong] 3D 初始化失败，降级 SVG：', e)
+    ok = false
+  }
   if (ok) {
     bonesMode.value = true
-    await player.setSpecies(props.species)
-    player.setStageConfig({ groundY: props.scene?.groundY ?? 0.76 })
+    await player.setStageConfig({ scene: props.scene, night: props.night })
     player.setAmbient({ stageKey: props.stageKey, illness: props.illness, dead: props.dead })
-    // 尺寸自适应：观察画布自身（随布局/旋转变化）+ 初始化后的下一帧校准
+    // 尺寸自适应：观察画布自身（随布局/旋转/全屏变化）
     resizeObserver = new ResizeObserver(() => player.resize())
     resizeObserver.observe(canvasEl.value)
     requestAnimationFrame(() => player.resize())
     emit('bones-ready', player)
+  } else {
+    player.dispose()
   }
-  // WebGL 不可用：bonesMode 保持 false，模板渲染 SVG 降级
+  // WebGL 或模型不可用：bonesMode 保持 false，模板渲染 SVG 降级
 })
 
 onBeforeUnmount(() => {
@@ -77,16 +100,28 @@ watch(
   }
 )
 watch(
-  () => props.scene,
-  (sc) => {
-    if (bonesMode.value) player.setStageConfig({ groundY: sc?.groundY ?? 0.76 })
+  () => [props.scene, props.night],
+  ([sc, night]) => {
+    if (bonesMode.value) player.setStageConfig({ scene: sc, night })
   }
 )
+
+function onDockDragStart(itemId) {
+  player.setDragging(itemId)
+}
 </script>
 
 <template>
-  <div class="screen" @click.self="$emit('touch-pet')">
-    <SceneBackdrop :scene="scene" :night="night" />
+  <div class="screen b3d" :class="{ 'is-fullscreen': fullscreen }">
+    <!-- 3D 画布（Babylon.js：宠物/场景/物理投掷；SVG 降级时透明不可见） -->
+    <canvas
+      ref="canvasEl"
+      class="pet-canvas"
+      :title="dead ? '' : `轻点 ${petName} 摸摸它 · 轻点地面让它走过去`"
+    />
+
+    <!-- SVG 降级背景（WebGL 不可用） -->
+    <SceneBackdrop v-if="!bonesMode" :scene="scene" :night="night" />
 
     <!-- 顶部状态胶囊 -->
     <div class="chips">
@@ -101,16 +136,26 @@ watch(
     <!-- 病标 / 昏迷标 -->
     <div v-if="illness && !dead" class="sick-pop">🤒</div>
 
-    <!-- 骨骼动画画布（PixiJS + DragonBones；透明画布常驻，无内容时不可见） -->
-    <canvas
-      ref="canvasEl"
-      class="pet-canvas"
-      :title="dead ? '' : `摸摸 ${petName}`"
-      @click.stop="$emit('touch-pet')"
+    <!-- 全屏按钮（常见游戏交互模式：全屏沉浸玩耍） -->
+    <button
+      class="fullscreen-btn"
+      type="button"
+      :title="fullscreen ? '退出全屏' : '全屏玩耍'"
+      @click.stop="$emit('toggle-fullscreen')"
+    >
+      {{ fullscreen ? '✕' : '⛶' }}
+    </button>
+
+    <!-- 道具坞：拖拽投掷（3D 模式专属交互） -->
+    <ItemDock
+      v-if="bonesMode && !dead"
+      :disabled="coma"
+      :cooldowns="cooldowns"
+      @drag-start="onDockDragStart"
     />
 
     <!-- SVG 降级宠物（WebGL 不可用） -->
-    <div v-if="!bonesMode" class="pet-wrap" @click.stop="$emit('touch-pet')" :title="dead ? '' : `摸摸 ${petName}`">
+    <div v-if="!bonesMode" class="pet-wrap" :title="dead ? '' : `摸摸 ${petName}`">
       <PetAvatar
         :species="species"
         :stage-key="stageKey"

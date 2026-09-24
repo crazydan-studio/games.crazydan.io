@@ -68,6 +68,10 @@ export function createInteractionSystem({ bus, getSave, getSpecies, now = () => 
   }
 
   // ---------- 场景交互器（锚点 + 预留扩展） ----------
+  // 动态锚点：3D 交互（投掷食物/玩具的落点）临时覆写静态锚点，
+  // 供动作系统「先走向再执行」；动作结束后清除。
+  const dynamicAnchors = {}
+
   const scene = {
     id: 'scene',
     capabilities: ['anchors'],
@@ -76,14 +80,30 @@ export function createInteractionSystem({ bus, getSave, getSpecies, now = () => 
       const s = getSave()
       if (!s) return {}
       const sceneDef = getScene(s.settings?.sceneId, s.customScenes)
-      if (!sceneDef?.props) return {}
+      if (!sceneDef?.props) return { ...dynamicAnchors }
       const out = {}
       for (const [key, propType] of Object.entries(ANCHOR_PROPS)) {
         const prop = sceneDef.props.find((p) => p.type === propType)
         if (prop && Number.isFinite(prop.x)) out[key] = Math.round(prop.x * 100)
       }
-      return out
+      return { ...out, ...dynamicAnchors }
     },
+    /** 设置动态锚点（0-100 舞台坐标）；值非法则忽略 */
+    setDynamicAnchor(key, x) {
+      const n = Number(x)
+      if (typeof key !== 'string' || !key || !Number.isFinite(n) || n < 0 || n > 100) return false
+      dynamicAnchors[key] = Math.round(n * 10) / 10
+      return true
+    },
+    /** 清除动态锚点（单个或全部） */
+    clearDynamicAnchor(key) {
+      if (key === undefined) {
+        for (const k of Object.keys(dynamicAnchors)) delete dynamicAnchors[k]
+        return true
+      }
+      return delete dynamicAnchors[key]
+    },
+    dynamicAnchors: () => ({ ...dynamicAnchors }),
     /** 预留：场景氛围/昼夜对宠物的影响（未来：心情修正、事件指令） */
     ambientEffect() {
       return null

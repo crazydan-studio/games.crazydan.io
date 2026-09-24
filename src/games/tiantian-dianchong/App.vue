@@ -18,7 +18,7 @@ import { decideRandom } from './core/randomLife.js'
 import { decideAi } from './core/ai/life.js'
 import { getSpecies } from './core/species.js'
 import { getScene, sceneList } from './core/scenes.js'
-import { createCommandBus } from './core/commands.js'
+import { createCommandBus, PRIORITIES } from './core/commands.js'
 import { createActionSystem, ACTION_EVENT } from './core/actionSystem.js'
 import { createLifeRuntime } from './core/lifeRuntime.js'
 import { createInteractionSystem } from './core/interactions.js'
@@ -49,6 +49,48 @@ let fallbackTickTimer = null
 let aiFailCount = 0
 let aiCooldownUntil = 0
 let lastTouchAt = 0
+let pendingFetch = null // 投掷玩具落地 → 宠物走过去后自动玩耍
+let pendingFetchTimer = null
+
+// ---- 全屏模式（常见游戏交互：全屏沉浸玩耍） ----
+const fullscreen = ref(false)
+
+function toggleFullscreen() {
+  const el = document.fullscreenElement || document.querySelector('.app-shell')
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.()
+  } else {
+    el?.requestFullscreen?.().catch(() => toast('当前环境不支持全屏', 'warn'))
+  }
+}
+
+function onFullscreenChange() {
+  fullscreen.value = !!document.fullscreenElement
+}
+
+// ---- 3D 游戏化交互：轻点地面走过去 / 投掷道具落地结算 ----
+function onGroundClick(x) {
+  if (!save.value || save.value.pet.dead || !bus) return
+  bus.send('move', { targetX: x }, { source: 'user', priority: PRIORITIES.user, reason: '轻点地面' })
+}
+
+/** 投掷物落地：食物=动态锤点（走过去吃）；玩具=先走过去再玩耍 */
+function onItemLanded({ kind, action, x }) {
+  const s = save.value
+  if (!s || !interactions || s.pet.dead) return
+  if (kind === 'food') {
+    interactions.scene.setDynamicAnchor('food', x)
+    interactions.user.request(action || 'feed')
+    // 动态锤点用后即清（到达即执行动作，8 秒足够走完一条舞台）
+    setTimeout(() => interactions?.scene.clearDynamicAnchor('food'), 8000)
+  } else {
+    // 玩具：先派移动指令走到落点，到达后自动触发「玩耍」结算
+    pendingFetch = { actionId: action || 'play' }
+    clearTimeout(pendingFetchTimer)
+    pendingFetchTimer = setTimeout(() => (pendingFetch = null), 10000)
+    bus.send('move', { targetX: x }, { source: 'user', priority: PRIORITIES.user, reason: '追赶玩具' })
+  }
+}
 
 // ---- 三层系统实例 ----
 let bus = null
@@ -129,8 +171,17 @@ function handleActionEvent(ev) {
     player?.play(ev.anim || 'walk', true)
     player?.moveTo(ev.targetX)
     svgBehavior.value = 'wander'
-  } else if (ev.type === ACTION_EVENT.ARRIVED) {
-    actionSystem?.arrived()
+  }
+}
+
+/** 渲染层到达回报：动作系统就位回调 + 投掷玩具追接（走到落点后自动玩耍结算） */
+function onRenderArrived() {
+  actionSystem?.arrived()
+  if (pendingFetch) {
+    const pf = pendingFetch
+    pendingFetch = null
+    clearTimeout(pendingFetchTimer)
+    interactions?.user.request(pf.actionId)
   }
 }
 
@@ -176,7 +227,7 @@ function setupSystems() {
 function onPlayerReady(instance) {
   player = instance
   player.start(
-    () => actionSystem?.arrived(),
+    onRenderArrived,
     (x, facing) => {
       actionSystem?.updatePosition(x, facing)
       actionSystem?.tick()
@@ -461,10 +512,13 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopLoops()
   if (save.value) persistSave(save.value)
+  clearTimeout(pendingFetchTimer)
   document.removeEventListener('visibilitychange', onVisibility)
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
 })
 
 document.addEventListener('visibilitychange', onVisibility)
+document.addEventListener('fullscreenchange', onFullscreenChange)
 window.addEventListener('beforeunload', () => {
   if (save.value) persistSave(save.value)
 })
@@ -519,8 +573,13 @@ window.addEventListener('beforeunload', () => {
           :bubble="bubble"
           :clock-text="clockText"
           :pet-name="pet.name"
+          :fullscreen="fullscreen"
+          :cooldowns="cooldownRest"
           @touch-pet="onTouchPet"
           @bones-ready="onPlayerReady"
+          @ground-click="onGroundClick"
+          @item-landed="onItemLanded"
+          @toggle-fullscreen="toggleFullscreen"
         />
 
         <StatusPanel

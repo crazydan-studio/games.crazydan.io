@@ -169,26 +169,41 @@
 - 交互系统已就绪（§3.6）：多宠物时 store 扩展为 `pets[]`，舞台按位置渲染多只，UI 调 `interactions.pet.interact(actor, target, type)` 即通（内部复用 `registerPetInteraction` 总线）
 - 场景 `sceneId` 独立字段，切换 = 改字段；AI 生成场景已在 §3.5 预留
 
-### 3.9 骨骼动画渲染层（db/，基于 PixiJS + DragonBones）
+### 3.9 3D 渲染与交互层（b3d/，基于 Babylon.js）
 
-宠物状态与动作由 **DragonBones 2D 骨骼动画**实时呈现（运行时 [pixi.js](https://pixijs.com/) 8.6 + [pixi-dragonbones-runtime](https://github.com/h1ve2/pixi-dragonbones-runtime) 8.0.3，后者内含 DragonBones 官方 MIT 运行时）。渲染资产采用**预设 + 程序化双轨**：
+宠物与场景由 **Babylon.js Web 3D** 实时呈现（运行时 `@babylonjs/core` + `@babylonjs/loaders` 9.x，WebGL2）。模型资产全部来自两位 CC0 素材作者（来源与许可见 `assets/b3d/ATTRIBUTION.md`）：
 
-- **预设资产（猫/狗/恐龙）**：全网检索导入的成熟骨骼数据（DragonBones 5.x JSON），存于 `public/tiantian-dianchong/assets/db/`（来源与许可见 `ATTRIBUTION.md`）——猫/狗为 chimple/bahama 的同族骨架（53 骨骼/29 动画，MPL-2.0），恐龙为 DragonBonesJS 官方 dragon_boy（19 骨骼/4 动画，MIT）。预设动画词汇与动作系统不同，由 `animationMap.js` 映射（如 walk→skating 踩滑板、medicine→drinking 举杯喝药、pet→hifi 求抱抱），并用姿态变换弥补词汇缺口（sleep→慢放+侧卧旋转、dead→冻结+暗化、shiver→颤动）
-- **程序化骨架（猪/AI 物种）**：全网无许可合规的猪形 DragonBones 资产，猪猪与 AI 生成物种由 `skeletonFactory.js` 在运行时直接产出 DragonBones 5.5 格式的骨架、贴图集与动画数据——零外部资产文件，AI 新物种领养即刻拥有骨骼动画，造型与领养预览 SVG 同源
+- **Quaternius（quaternius.com）**：小狐狸/柴犬（Ultimate Animated Animals，12 段骨骼动画含 Eating/Attack/Gallop/Jump）、霸王龙（Animated LowPoly Dinosaurs，6 段）、猪猪（Farm Animals Animated，2 段，姿态程序化弥补）、自然场景（树木/灌木/草/岩石）、玩具骨头与鸡腿（RPG Items）
+- **KayKit（kaylousberg.itch.io）**：室内家具（床/沙发/桌/椅/地毯/落地灯/书架/仙人掌，Furniture Bits）与食盆/食物道具（bowl/汉堡/胡萝卜/芝士，Restaurant Bits）
+- **自定义/AI 物种**：无预设模型，用「通用狐狸身体 + `look.body` 染色」呈现，AI 新物种领养即刻 3D 化
+
+**游戏化交互（常见 3D 宠物游戏交互模式）**：
+
+- **直接抚摸**：轻点宠物 → 爱心粒子 + 心情增益 + 撒娇动作（抚摸节流彩蛋保留）
+- **物品投掷**：底部道具坞按住拖出（汉堡/胡萝卜/芝士/鸡腿/玩具骨头）→ 松手按拖拽轨迹计算初速度 → 抛物线 + 地面弹跳物理 → 落地后「食物=动态锚点喂食 / 玩具=宠物追过去玩耍」全链路闭环
+- **投喂与追玩**：`interactions.scene.setDynamicAnchor()` 临时覆写食盆锚点为食物落点，宠物走向落点进食后锚点自动清除；玩具落点派 move 指令，到达自动结算玩耍
+- **地面点击行走**：轻点地面任意位置 → 宠物走过去（ArcRotateCamera 下的屏幕→世界逆投影射线求交）
+- **视角控制**：拖拽空白旋转视角（α 限位 ±1.25 弧度）、滚轮/双指缩放（4–14）
+- **全屏模式**：右上演出按钮 → `requestFullscreen` 沉浸玩耍（`:fullscreen` 下舞台自适应拉高）
 
 | 模块 | 职责 |
 | --- | --- |
-| db/parts.js | 部件图集：按物种 `look`（配色/耳型/尾型/鼻吻/附加件）Canvas2D 绘制全部身体部件到一张离线画布，产出 DragonBones 贴图集 SubTexture 矩形 |
-| db/skeletonFactory.js | 骨架工厂：13 骨骼 / 20 插槽的正面 Q 版装配（root→body→四肢/尾/head→耳/眼），产出 DragonBones 5.5 JSON（帧时长累进的拆分时间线、循环回环帧、displayIndex 表情切换）；**贴图集与骨架同名**（运行时按骨架名检索贴图集） |
-| db/animations.js | 动画库：17 个参数化动画时间线（idle/walk/eat/sleep/wake/beg/play/groom/stare/wash/medicine/pet/happy/sad/shiver/coma/dead），**物种特质直接写进动画风格**——代谢→呼吸幅度、情绪波动→摆尾幅度、合群度→弹跳高度 |
-| db/assets.js | 预设资产清单与加载：三套预设资产（含 dino 朝向基准 facingBase）→ fetch + PIXI Assets → 模块级缓存 |
-| db/animationMap.js | 动作→动画映射：逻辑动画名 → 预设资产实际动画（映射表 + 兜底链 + 姿态变换 rate/lie/dim/jitter/once） |
-| db/PetPlayer.js | 渲染器：PIXI Ticker → PixiFactory.advanceTime（手动时钟）→ 骨架世界变换；舞台 0-100 抽象坐标 → 画布像素、flipX 朝向镜像（恐龙侧视朝左经 facingBase 基准翻转）、到达回报；成长阶段缩放 / 长寿白眉 / 病中眩晕眼的程序化覆盖（程序化骨架）；`window.__dbDebug` 调试钩子 |
+| b3d/assets.js | 3D 资产清单（纯数据）：四宠物模型（family 决定动画词汇表）/场景道具（type 对齐 scenes.js 的 PROP_TYPES，anchor 类贴行走线）/投掷道具（kind=food/toy → action）；`modelKeyOf()` 物种→模型键（无预设回落通用身体+染色） |
+| b3d/animationMap.js | 动作→动画映射（纯逻辑）：三模型家族（uaa/farm/trex）词汇表与 GLB 实际动画名一致（单测对照真实文件校验）；17 个逻辑动画×三家族全部可解析；姿态变换 rate（睡眠慢放）/lie（侧卧角度）/dim（昏迷暗化）/jitter（寒颤）/sink（贴地下沉）弥补动画词汇缺口；兜底链→家族 idle→冻结 |
+| b3d/stage3d.js | 舞台搭建：地面/背景墙（室内场景）/昼夜光照（白天半球+定向阴影；夜晚压暗+暖点光+星月）/道具装载（0-1 屏幕坐标→世界坐标）/程序化装饰（栅栏/云朵/城市剪影/皮球）/爱心粒子纹理；`importGlb` 带缓存的资产导入 |
+| b3d/PetPlayer3D.js | 3D 渲染器：接口契约与渲染层解耦（init/setSpecies/play/moveTo/start/...，App 只认这套）；宠物归一化缩放与贴地；骨骼-网格-动画组三同步克隆；自写「屏幕→世界」射线（宠物胶囊命中+地面求交）；投掷物理（抛物线+弹跳+摩擦+接近拾取）；`window.__b3dDebug` 调试钩子 |
 
-- **渲染管线**：透明 WebGL 画布叠在场景 SVG 之上 → PixiFactory.newInstance(false)（动画由播放器手动推进，不用共享 ticker）→ 预设资产解析/程序化数据注入 → buildArmatureDisplay；适配缩放按运行时 getBounds 实测（含道具动画的 aabb 不可靠）；随 ResizeObserver 自适应
-- **解析记帐坑（历史 bug 防线）**：骨架与贴图集 JSON 同名（cat/cat），**解析去重必须分两个 Set**——共用一个会让贴图集解析被跳过，插槽全部拿到 1×1 空纹理，宠物隐形；程序化贴图集 name 必须与骨架同名（按骨架名检索 _textureAtlasDataMap）
-- **降级链路**：WebGL 初始化失败（极端环境）→ `bonesMode = false` → 模板渲染参数化 SVG 宠物（PetAvatar，v1 同源造型），玩法完全不受影响
-- **指令→动画接线**（App.vue）：动作系统生命周期事件 `action:start/end` → `player.play(anim, loop)`；`move:to` → 走行动画 + `moveTo(targetX)`；渲染层每帧回报位置与到达 → `updatePosition/arrived`，位置与动作状态双向同步
+- **渲染管线**：Babylon Engine（WebGL2，DPR≤2 超采样）→ ArcRotateCamera（α=+π/2 玩家侧）→ 昼夜光照 + 阴影（DirectionalLight `autoUpdateExtends` 收敛视锥）→ 透明画布上叠 UI 覆盖层（气泡/胶囊/Zzz/道具坞）
+- **历史坑防线（务必保持的修复）**：
+  - **相机方位**：ArcRotateCamera 的 `alpha=+π/2` 才在玩家侧（+Z）看墙；`-π/2` 会把相机放到背景墙后（墙背面被剔除 → 满屏雾色「黑屏」）
+  - **幽灵模型**：`SceneLoader.ImportMeshAsync` 会把原始 mesh 直接加入 scene——导入后必须 `setEnabled(false)`（克隆时显式 `setEnabled(true)`），否则克隆体之外还渲染一份静止原版（半空黑条）
+  - **骨骼克隆三同步**：mesh + Skeleton + AnimationGroup 必须一起克隆（targetConverter 按骨骼名映射），动画组**保持原名**（animationMap 按原名匹配，前缀化会让宠物冻结）
+  - **Babylon 9 事件坑**：`PointerInfo` 的原生事件属性是 `pi.event`（旧文档的 `pointerEvent` 为 undefined）；`POINTERTAP` 在部分环境不派发，用 DOWN 记位 + UP 自查位移 <6px 判定轻点
+  - **picking side-effect**：Babylon 9 深路径导入下 `scene.pick/createPickingRay` 的原型注册不稳定——自写逆投影射线（`camera.getTransformationMatrix().invert()`，**矩阵乘序为 view×proj**，反了会得到原点附近的假射线；dir 必须 normalize，否则点线距离公式失效→任何点击都命中宠物）
+  - **场景重建**：换场景会 dispose 旧 ShadowGenerator——宠物 mesh `receiveShadows=false`（悬空 shadow map 引用会渲染成黑块），重建后重新 `addShadowCaster`；夜晚时段天空/雾同步压暗（避免白天色天空+黑暗宠物的割裂）
+  - **SW 资产缓存**：资产文件变更必须 bump `CACHE` 版本号（v3 起），否则缓存优先进旧损坏文件
+- **降级链路**：WebGL 初始化失败 **或宠物模型加载失败**（资产缺失/损坏/断网首访）→ `bonesMode = false` → 模板渲染参数化 SVG 宠物（PetAvatar + SceneBackdrop），玩法完全不受影响
+- **指令→动画接线**（App.vue）：与 2D 版完全一致——动作系统生命周期事件 `action:start/end` → `player.play(anim, loop)`；`move:to` → 走行动画 + `moveTo(targetX)`；渲染层每帧回报位置与到达 → `updatePosition/arrived`；3D 交互事件（ground-click/item-landed/touch-pet）→ 指令总线/交互系统
 
 ## 4. AI 集成设计
 
@@ -230,7 +245,8 @@
 ## 5. UI 与视觉
 
 - 造型隐喻「**电子宠物机**」：上半是圆角「屏幕」（场景 + 骨骼动画画布 + 心声气泡），下半是实体感按键区（六个操作按钮），移动端单手可握
-- **骨骼动画舞台（PetStage.vue + db/）**：WebGL 画布常驻叠加在场景 SVG 之上（预设资产或程序化骨架），WebGL 不可用时自动降级为参数化 SVG 宠物（PetAvatar.vue，v1 同源造型，玩法不变）
+- **3D 舞台（PetStage.vue + b3d/）**：Babylon.js 全屏感画布（3D 宠物 + 场景道具 + 投掷物理 + 相机控制），覆盖层为心声气泡/状态胶囊/道具坞/全屏按钮；WebGL 或模型加载失败时自动降级为参数化 SVG 宠物（PetAvatar + SceneBackdrop，玩法不变）
+- **道具坞（ItemDock.vue）**：底部悬浮道具条，按住拖出投掷（汉堡/胡萝卜/芝士/鸡腿/玩具骨头），对应照料操作冷却联动
 - 延续本站手绘暖感，但主色切换为「电光青绿」（`--primary: #26B99A`，底色薄荷奶油），与消消乐形成姊妹感
 - 领养页：四物种卡片（造型预览 + 特性摘要 + 性格标签）→ 取名（≤8 字）→ 开局
 - 状态条 + 事件日志 + 设置弹窗（时间流速 / 生死开关（默认关，开启需二次确认）/ 生命系统切换 / AI 配置 / 场景切换 / 导入导出 / 重新领养）
@@ -244,9 +260,9 @@ src/games/tiantian-dianchong/
 ├── main.js                     # Vue 挂载 + SW 注册
 ├── style.css                   # 游戏设计系统
 ├── App.vue                     # 编排：领养页 / 主界面 / 设置 / 三层系统接线
-├── components/                 # AdoptScreen / PetStage（骨骼动画舞台）/ PetAvatar（SVG 降级）/
+├── components/                 # AdoptScreen / PetStage（3D 舞台 + 交互桥接）/ PetAvatar（SVG 降级）/
 │                               # SceneBackdrop / StatusPanel / ActionBar / LogPanel /
-│                               # SettingsModal / AiAuditPanel（AI 调用记录调试面板）
+│                               # ItemDock（投掷道具坞）/ SettingsModal / AiAuditPanel
 ├── core/                       # 纯逻辑（无 Vue 依赖，Node 可直接单测）
 │   ├── time.js  species.js  life.js  behaviors.js  randomLife.js
 │   ├── commands.js             # 指令协议 + 指令总线（校验/派发/审计历史）
@@ -254,23 +270,22 @@ src/games/tiantian-dianchong/
 │   ├── lifeRuntime.js          # 生命系统运行时：时间泵 + 生理监视 + 行为决策循环
 │   ├── actions.js  storage.js  scenes.js  interactions.js（交互系统）
 │   └── ai/                     # provider.js  life.js  species.js  scene.js  audit.js
-├── db/                         # 骨骼动画层（PixiJS + DragonBones）
-│   ├── parts.js                # 运行时部件图集（Canvas2D → SubTexture）
-│   ├── skeletonFactory.js      # 程序化 DragonBones 5.5 骨架工厂（猪/AI 物种）
-│   ├── animations.js           # 17 个参数化动画时间线（物种特质驱动）
-│   ├── assets.js               # 预设资产清单与加载（猫/狗/恐龙）
-│   ├── animationMap.js         # 动作→动画映射（映射表+兜底链+姿态变换）
-│   └── PetPlayer.js            # 渲染器 + 舞台移动 + 环境态覆盖
+├── b3d/                        # 3D 渲染与交互层（Babylon.js）
+│   ├── assets.js               # 3D 资产清单（四宠物/场景道具/投掷道具；纯数据可单测）
+│   ├── animationMap.js         # 动作→动画映射（三家族词汇表+姿态变换+兜底链；纯逻辑可单测）
+│   ├── stage3d.js              # 舞台搭建（地面/墙/昼夜光照/道具装载/程序化装饰/爱心纹理）
+│   └── PetPlayer3D.js          # 3D 渲染器（接口与动作系统解耦）+ 自写射线拾取 + 投掷物理
 └── README.md                   # 本设计文档
 public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
-                                # assets/db/ 预设骨骼资产（cat/dog/dino + ATTRIBUTION）
+                                # assets/b3d/ 3D 模型资产（pets/home/nature/props + ATTRIBUTION）
 ```
 
 ## 7. 测试
 
-- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**912 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 不足 1 小时的零头折算（不误跳整小时）/ 随机生命系统确定性与状态修正 / 存档导入导出回环与脏数据清洗 / AI JSON 解析、端点兼容、超时中止、行为白名单降级 / AI 物种与场景钳制 / 宠物间交互总线 / AI 调用审计（四类分类入档、完整提示词、去向标注、密钥掩码、FIFO 上限、分类清空、导出、类型扩展、订阅、截断）/ **指令总线（协议校验、优先级钳制、来源白名单、审计历史、非法指令拒绝）** / **动作系统（优先级门禁、睡眠/死亡体态保护、锚点接近、踱步目标、限时回落、幂等续态）** / **生命运行时（生理监视→指令、载入对齐、行为决策派发）** / **交互系统（交互器注册、场景锚点提取、多宠物预留）** / **骨骼资产（真实 DragonBones 运行时解析四物种程序化骨架、贴图集同名约定、动画帧时长累进=duration、循环回环帧、displayIndex 合法性、物种特质→动画风格差异、卷尾空显示插槽、动作→动画映射（滑板/喝药/侧卧/冻结/兜底链/恒等）、预设资产三件套齐全+许可随分发+运行时解析）**
+- `scripts/test-pet-engine.mjs`（`pnpm test` 一并运行）：**360 项纯逻辑断言**全过 —— 时间换算 / 衰减与物种差异 / 喂食与超饱 / 操作冷却 / 生病与死亡开关（昏迷自愈）/ 成长阶段 / 离线结算与 90 日上限 / 零头折算 / 随机生命系统确定性 / 存档导入导出回环 / AI JSON 解析、端点兼容、超时中止、降级 / AI 物种与场景钳制 / 宠物间交互总线 / AI 调用审计（四类分类、密钥掩码、FIFO、导出、订阅、截断）/ 指令总线 / 动作系统（门禁/锚点/回落）/ 生命运行时 / 交互系统 / **Babylon 3D 资产（四物种模型绑定、GLB 真实解析（魔数/JSON chunk/蒙皮/体积）、家族动画词汇表与 GLB 完全一致、17 逻辑动画×三家族全解析+姿态语义、道具与投掷物文件+动作合法性、自定义物种染色回落、动态锚点（设置/覆写/清除/非法拒绝/覆写静态）、投掷食物链路（先移动后进食事件序）、许可文档、SW 预缓存清单与磁盘文件一致）**
 - agent-browser E2E（生产构建 + 静态托管）：门户卡片 → 领养四物种 → 领养狗狗「旺财」→ nl-hud 预置 → 1× 时间节奏（15 秒仅微量消耗）→ 喂食（+38 饱食、日志、气泡）→ 玩耍与摸头彩蛋 → 重新领养（confirm + 清档）→ 600× 流速与场景切换 → 导出存档（blob 完整、无密钥）→ 导入回环（改名换场景、历史保留）→ AI 配置保存（cfg/key 分离存储）→ mock LLM 验证 AI 智能体生命系统（chat/completions 调用 + AI 台词气泡）→ SW 注册 → 断网重载完整可玩 → 浏览器回退门户；全程零控制台错误
-- **骨骼动画 E2E（PixiJS+DragonBones 版）**：领养猫咪→预设骨架渲染（53 骨骼/29 动画，VLM 视觉审查确认粉色猫完整可见、睡姿侧卧自然）→ 喂食链路（走向食盆→eating→回落 idle）→ 直接驱动 walk→skating 踩滑板确认 → 领养狗狗（紫色，同族骨架）→ 领养恐龙（19 骨骼/4 动画，**朝向基准镜像修复后面向右**）→ 领养猪猪（程序化骨架 13 骨骼，圆身/耳朵/卷尾完整渲染）→ WebGL 屏蔽 → **SVG 降级宠物正常可玩** → 断网重载 → **骨骼动画与预设资产（SW 缓存）离线完全可用** → 全程零控制台错误
+- **3D E2E（Babylon.js 版，agent-browser + VLM 视觉审查）**：存档恢复→**小狐狸 3D 侧卧睡眠**（VLM 确认低模狐狸+家具+地毯完整，Zzz 气泡）→ **抚摸交互**（轻点狐狸→爱心粒子飘浮+心情气泡）→ **地面点击走位**（move 指令+Walk 动画）→ **投掷汉堡**（道具坞拖拽→抛物线弹跳→落地→动态锚点→走向落点→进食消失→饱食结算全链路）→ **投掷玩具骨头**（落地→宠物走向→到达自动「撒欢玩耍」结算→骨头拾取消失）→ 场景切换草地公园（栅栏/绿茵/夜空协调）→ 重新领养**霸王龙**（VLM：完整绿色霸王龙无缺陷）→ **猪猪**（粉色圆身无缺陷）→ **柴犬**（橙白配色无缺陷）→ **断网重载**（SW 缓存 3D 资产离线完整可玩+离线抚摸）→ 全程零控制台错误
+- 已知环境限制：headless 无 GPU 环境 Fullscreen API promise 不 resolve（真实浏览器正常，代码路径已验证）；软渲染帧率 ~6fps 属沙箱限制
 
 ## 8. 设计更新记录
 
@@ -289,3 +304,4 @@ public/tiantian-dianchong/      # favicon / manifest / sw.js / icons/
 - 宠物图鉴 / 成长相册 / 老年回忆录
 - 跨设备自动同步（WebDAV / 云盘直连导入导出）
 | 2026-09-23 | **骨骼动画迁移 PixiJS + DragonBones + 预设资产导入**：渲染运行时从 spine-webgl 4.3 换为 pixi.js 8.6 + pixi-dragonbones-runtime 8.0.3；**预设+程序化双轨**——全网检索导入猫/狗（chimple/bahama，MPL-2.0，53 骨骼/29 动画）与恐龙（DragonBonesJS 官方 dragon_boy，MIT，19 骨骼/4 动画）预设骨架，猪/AI 物种由 skeletonFactory 程序化生成 DragonBones 5.5 数据（中性时间线→拆分帧格式转换，坐标 y/rot 取负换向）；animationMap 动作→动画映射（walk→skating 滑板、medicine→drinking、pet→hifi、sleep→慢放+侧卧、dead→冻结+暗化；恐龙 walk/jump/fall 原生+朝向基准镜像）；SW 预缓存九件资产文件实现三物种离线。修复两处隐形 bug 根因：骨架与贴图集 JSON 同名致解析去重误跳过贴图集（插槽 1×1 空纹理）、程序化贴图集名与骨架名不一致致检索失败 |
+| 2026-09-24 | **重制为 Babylon.js Web 3D**：废弃 2D 骨骼动画方案（spine→DragonBones 两代），渲染层全面迁移 @babylonjs/core+loaders 9.x（WebGL2）；模型资产来自 Quaternius（小狐狸/柴犬/霸王龙/猪猪/自然/玩具）与 KayKit（家具/食盆/食物）两位 CC0 作者；**游戏化交互**——直接抚摸（爱心粒子）、道具坞拖拽投掷（抛物线+弹跳物理+动态锚点喂食/追玩）、地面点击行走、视角旋转缩放、全屏沉浸模式；PetPlayer3D 与动作系统接口契约保持不变（三层指令驱动架构零改动）；物种更名对齐 3D 资产（猫咪→小狐狸、狗狗→柴犬、恐龙怪兽→霸王龙）；修六个 3D 深坑：相机方位（alpha=+π/2）、幽灵原始模型（导入后禁用）、Babylon 9 事件属性（pi.event）与 TAP 不派发、picking side-effect 不稳定（自写逆投影射线+矩阵乘序+归一化）、场景重建 shadow map 悬空黑块、夜晚天空割裂；SW 预缓存 35 个 GLB（v3）离线可玩 |

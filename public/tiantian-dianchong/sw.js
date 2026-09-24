@@ -4,7 +4,7 @@
 //   · 静态资源：缓存优先（首次访问后全部落入缓存，断网可玩）
 //   · 开发服务器路径（/src/、/@vite 等）：永远走网络，避免冻结 HMR
 //   · AI 接口请求（外部 origin / POST）：不经 SW，天然直连
-const CACHE = 'ttdc-cache-v1'
+const CACHE = 'ttdc-cache-v3' // 资产更新（pig.glb 修复）→ 缓存版本必须升级
 
 const CORE_ASSETS = [
   './',
@@ -14,16 +14,42 @@ const CORE_ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
-  // DragonBones 预设骨骼资产（猫/狗/恐龙；猪与 AI 物种为程序化生成，随 JS 打包）
-  './assets/db/cat/cat_ske.json',
-  './assets/db/cat/cat_tex.json',
-  './assets/db/cat/cat_tex.png',
-  './assets/db/dog/dog_ske.json',
-  './assets/db/dog/dog_tex.json',
-  './assets/db/dog/dog_tex.png',
-  './assets/db/dino/dragon_boy_ske.json',
-  './assets/db/dino/dragon_boy_tex.json',
-  './assets/db/dino/dragon_boy_tex.png'
+  // Babylon.js 3D 资产（Quaternius + KayKit，CC0；许可与来源见 ATTRIBUTION.md）
+  './assets/b3d/pets/fox.glb',
+  './assets/b3d/pets/shibainu.glb',
+  './assets/b3d/pets/pig.glb',
+  './assets/b3d/pets/trex.glb',
+  './assets/b3d/home/bed_single_A.glb',
+  './assets/b3d/home/book_set.glb',
+  './assets/b3d/home/cactus_small_A.glb',
+  './assets/b3d/home/chair_A.glb',
+  './assets/b3d/home/couch.glb',
+  './assets/b3d/home/lamp_standing.glb',
+  './assets/b3d/home/pictureframe_small_A.glb',
+  './assets/b3d/home/rug_oval_A.glb',
+  './assets/b3d/home/shelf_B_small_decorated.glb',
+  './assets/b3d/home/table_medium.glb',
+  './assets/b3d/home/window.glb',
+  './assets/b3d/nature/bush1.glb',
+  './assets/b3d/nature/bush2.glb',
+  './assets/b3d/nature/bush3.glb',
+  './assets/b3d/nature/grass1.glb',
+  './assets/b3d/nature/grass2.glb',
+  './assets/b3d/nature/rock1.glb',
+  './assets/b3d/nature/rock2.glb',
+  './assets/b3d/nature/rock3.glb',
+  './assets/b3d/nature/tree1.glb',
+  './assets/b3d/nature/tree2.glb',
+  './assets/b3d/nature/tree3.glb',
+  './assets/b3d/nature/tree4.glb',
+  './assets/b3d/props/bone.glb',
+  './assets/b3d/props/bowl.glb',
+  './assets/b3d/props/chicken-leg.glb',
+  './assets/b3d/props/food_burger.glb',
+  './assets/b3d/props/food_ingredient_carrot.glb',
+  './assets/b3d/props/food_ingredient_cheese.glb',
+  './assets/b3d/props/food_stew.glb',
+  './assets/b3d/props/plate.glb'
 ]
 
 function isDevPath(pathname) {

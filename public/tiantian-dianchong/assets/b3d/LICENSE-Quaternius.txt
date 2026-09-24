@@ -1,0 +1,15 @@
+Quaternius 3D asset packs (https://quaternius.com/) by Quaternius
+License: Creative Commons Zero (CC0 1.0) — https://creativecommons.org/publicdomain/zero/1.0/
+
+Assets used in this game:
+- Ultimate Animated Animals (Fox, Shiba Inu) — models with skeletal animations
+- Animated LowPoly Dinosaurs (T-Rex) — model with skeletal animations
+- Farm Animals Animated (Pig) — model with skeletal animations
+- Ultimate Nature Pack (trees, bushes, grass, rocks) — static models
+- RPG Items Pack (bone toy, chicken leg) — static models
+- Ultimate Home Interior (window) — static model
+
+Source mirror: raw.githubusercontent.com/trebeljahr/quaternius-showcase (GLB conversions)
+and raw.githubusercontent.com/beep2bleep/FreeAssetsByKenneyNLandQuaternius (FBX, converted
+locally with FBX2glTF). Original distribution: quaternius.com / itch.io (quaternius.itch.io).
+All assets are CC0 - no attribution required, but we credit and thank the author.

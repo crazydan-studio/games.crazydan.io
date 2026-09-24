@@ -112,7 +112,7 @@ server {
 ## 测试
 
 ```bash
-pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：生命引擎 912 项断言
+pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：生命引擎 360 项断言（含 Babylon 3D 资产校验）
                 # （纯逻辑，Node 直接运行，含非方阵棋盘与时间推进/生死开关/AI 降级/
                 #  指令总线/动作系统/骨骼资产与真实 Spine 运行时解析等用例）
 ```
@@ -122,6 +122,6 @@ pnpm test       # 天天消消乐：三消引擎 24 项断言；天天电宠：�
 本项目代码遵循 [Apache License 2.0](./LICENSE)。
 
 > 例外说明：
-> - `pixi.js` + `pixi-dragonbones-runtime`（天天电宠的骨骼动画运行时）均为 MIT 许可（后者内含 DragonBones 官方 MIT 运行时）。
-> - `public/tiantian-dianchong/assets/db/` 下的预设骨骼资产：猫/狗来自 [chimple/bahama](https://github.com/chimple/bahama)（MPL-2.0），恐龙来自 [DragonBones/DragonBonesJS](https://github.com/DragonBones/DragonBonesJS)（MIT）——来源与许可见 `assets/db/ATTRIBUTION.md`，各目录附许可证副本。
-> - 猪猪与 AI 生成物种的骨骼/贴图/动画数据均为运行时程序化生成，零外部资产文件。
+> - `@babylonjs/core` + `@babylonjs/loaders`（天天电宠的 3D 运行时）同为 Apache-2.0，与本项目协议一致。
+> - `public/tiantian-dianchong/assets/b3d/` 下的 3D 模型资产全部为 CC0 公有领域：宠物/自然/玩具来自 [Quaternius](https://quaternius.com/)，家具/食盆/食物来自 [Kay Lousberg 的 KayKit](https://kaylousberg.itch.io/)——来源与许可见 `assets/b3d/ATTRIBUTION.md`，附许可证副本。
+> - 自定义/AI 生成物种无预设模型：由 3D 播放器用「通用狐狸身体 + 物种配色染色」呈现，零额外资产文件。

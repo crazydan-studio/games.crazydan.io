@@ -13,9 +13,9 @@
     "gen:pack": "node scripts/gen-sample-pack.mjs"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.27.1",
+    "@babylonjs/loaders": "^9.27.1",
     "jszip": "^3.10.1",
-    "pixi-dragonbones-runtime": "8.0.3",
-    "pixi.js": "8.6.6",
     "vue": "^3.5.13"
   },
   "devDependencies": {

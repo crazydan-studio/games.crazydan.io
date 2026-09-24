@@ -1426,3 +1426,162 @@ button {
     max-height: 92dvh;
   }
 }
+
+/* ============ 3D 舞台：全屏按钮 + 道具坞 ============ */
+.screen.b3d .pet-canvas {
+  touch-action: none; /* 相机手势（拖拽旋转/双指缩放）由 Babylon 接管 */
+}
+
+.screen .fullscreen-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f3d33;
+  box-shadow: 0 2px 10px rgba(15, 61, 51, 0.22);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.screen .fullscreen-btn:hover {
+  transform: scale(1.08);
+  background: #fff;
+}
+
+/* 道具坞：底部悬浮道具条（拖拽投掷） */
+.item-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 18px;
+  background: rgba(15, 61, 51, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 18px rgba(15, 61, 51, 0.35);
+  max-width: calc(100% - 20px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.item-dock::-webkit-scrollbar {
+  display: none;
+}
+
+.item-dock .dock-item {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 9px;
+  border: none;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.item-dock .dock-item:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.item-dock .dock-item:active:not(:disabled) {
+  transform: scale(0.94);
+  cursor: grabbing;
+}
+
+.item-dock .dock-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.item-dock .dock-emoji {
+  font-size: 21px;
+  line-height: 1.15;
+}
+
+.item-dock .dock-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.item-dock .dock-hint {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  writing-mode: vertical-rl;
+  letter-spacing: 0.14em;
+  padding: 2px 0 2px 2px;
+}
+
+/* 拖拽幽灵（跟随指针） */
+.dock-ghost {
+  position: fixed;
+  z-index: 9999;
+  transform: translate(-50%, -50%) scale(1.9);
+  font-size: 26px;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+}
+
+/* ============ 全屏模式（沉浸玩耍） ============ */
+.app-shell:fullscreen {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg, #eef8f4);
+  padding: 10px 12px 16px;
+}
+
+.app-shell:fullscreen .page {
+  max-width: min(920px, 100%);
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell:fullscreen .device {
+  flex: 1;
+}
+
+.app-shell:fullscreen .screen {
+  aspect-ratio: auto;
+  flex: 1;
+  min-height: min(62vh, 560px);
+  max-height: 74vh;
+}
+
+.app-shell:fullscreen .log-list {
+  max-height: 120px;
+}
+
+@media (max-width: 640px) {
+  .app-shell:fullscreen .screen {
+    min-height: 56vh;
+    max-height: 66vh;
+  }
+}
