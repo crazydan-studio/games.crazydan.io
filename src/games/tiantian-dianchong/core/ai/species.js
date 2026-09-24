@@ -14,6 +14,7 @@ const SCHEMA_PROMPT = `你是电子宠物游戏的物种设计师。根据用户
   "id": "小写英文与连字符，如 fire-fox",
   "name": "中文名（不超过 6 字）",
   "emoji": "一个代表性 emoji",
+  "model": "fox|shibainu|alpaca|dragon",  // 3D 建模（必填，任选其一）：fox=小狐狸，shibainu=柴犬，alpaca=羊驼，dragon=小飞龙（怪兽）
   "intro": "一句话介绍（不超过 40 字）",
   "personality": ["3 个性格标签，每个不超过 4 字"],
   "traits": {
@@ -40,7 +41,8 @@ const SCHEMA_PROMPT = `你是电子宠物游戏的物种设计师。根据用户
   },
   "quips": ["6-8 句符合性格的口头禅，每句不超过 15 字"]
 }
-数值设计要求：性格设定要与数值自洽（如「贪吃」对应高 metabolism 与 snackLove）；配色和谐、适合可爱画风。`
+数值设计要求：性格设定要与数值自洽（如「贪吃」对应高 metabolism 与 snackLove）；配色和谐、适合可爱画风。
+建模选择要求：model 必须从 fox / shibainu / alpaca / dragon 中选择最贴近物种形象的一个（如狼→fox，独角兽→alpaca，哥斯拉→dragon），配色应与所选建模协调。`
 
 /**
  * 生成物种（AI 确定生命系统与行为模式）
@@ -68,9 +70,12 @@ export async function generateSpeciesByAi({ name, idea }, cfg, fetchImpl = null)
   // 用户给的名字优先于模型命名
   if (name && String(name).trim()) res.data.name = String(name).trim().slice(0, 12)
   const species = clampSpecies(res.data)
-  if (!species) {
-    if (res.entryId) annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: '物种定义未通过 Schema 校验' })
-    return { ok: false, error: '物种定义校验失败' }
+  if (!species || !species.model) {
+    // 无建模回退：AI 未指定合法 model 的物种直接拒收（不会静默套用默认模型）
+    if (res.entryId) {
+      annotateAudit(res.entryId, { used: OUTCOMES.REJECTED, note: species ? '未指定合法 model（fox/shibainu/alpaca/dragon）' : '物种定义未通过 Schema 校验' })
+    }
+    return { ok: false, error: '物种定义校验失败：必须指定 model（fox/shibainu/alpaca/dragon）' }
   }
   if (res.entryId) {
     annotateAudit(res.entryId, { used: OUTCOMES.APPLIED, note: `物种「${species.name}」Schema 校验通过，数值已按范围钳制` })

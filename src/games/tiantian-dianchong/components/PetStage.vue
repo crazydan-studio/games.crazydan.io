@@ -1,11 +1,10 @@
 <script setup>
 // ============ 舞台：3D 电宠的「游乐场」 ============
 // Babylon.js 3D 画布（宠物模型 + 场景道具 + 投掷物理）+ 心声气泡 + 状态胶囊 +
-// Zzz/病标 + 道具坞（拖拽投掷）+ 全屏按钮。
-// WebGL 不可用时自动降级为参数化 SVG 宠物（PetAvatar + SceneBackdrop），玩法不受影响。
+// Zzz/病标 + 道具坞（拖拽投掷）+ 全屏按钮 + 加载等待遮罩。
+// 不做降级/回退：始终采用指定建模渲染；模型与场景加载完毕前显示等待遮罩，
+// 加载失败时遮罩转为错误提示（不回退 SVG）。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import SceneBackdrop from './SceneBackdrop.vue'
-import PetAvatar from './PetAvatar.vue'
 import ItemDock from './ItemDock.vue'
 import { createB3dPetPlayer } from '../b3d/PetPlayer3D.js'
 
@@ -15,7 +14,6 @@ const props = defineProps({
   species: { type: Object, required: true },
   stageKey: { type: String, default: 'adult' },
   mood: { type: Number, default: 70 },
-  behavior: { type: String, default: 'idle' }, // SVG 降级模式的行为
   dead: { type: Boolean, default: false },
   coma: { type: Boolean, default: false },
   asleep: { type: Boolean, default: false },
@@ -33,7 +31,9 @@ const emit = defineEmits([
 ])
 
 const canvasEl = ref(null)
-const bonesMode = ref(false)
+// 3D 就绪状态：loading → ready | error（加载完毕前等待遮罩常驻）
+const loadState = ref('loading')
+const loadError = ref('')
 const player = createB3dPetPlayer()
 let resizeObserver = null
 
@@ -48,7 +48,7 @@ const chips = computed(() => {
 })
 
 onMounted(async () => {
-  // 画布常驻渲染（透明画布在 WebGL 失败时本就不可见，避免 v-show 隐藏导致初始尺寸为 0）
+  // 画布常驻渲染（等待遮罩覆盖期间不暴露半成品画面）
   let ok = false
   try {
     ok = await player.init(canvasEl.value)
@@ -59,16 +59,17 @@ onMounted(async () => {
         onGroundClick: (x) => emit('ground-click', x),
         onItemLanded: (info) => emit('item-landed', info)
       })
-      // 宠物模型加载失败（资产缺失/损坏/断网首访）→ 整体降级 SVG，玩法不受影响
+      // 物种建模加载（无回退：失败即错误遮罩，不降级）
       ok = await player.setSpecies(props.species)
+      if (ok) await player.setStageConfig({ scene: props.scene, night: props.night })
     }
   } catch (e) {
-    console.warn('[dianchong] 3D 初始化失败，降级 SVG：', e)
+    console.error('[dianchong] 3D 初始化失败（不做降级）：', e)
     ok = false
+    loadError.value = String(e?.message || e)
   }
   if (ok) {
-    bonesMode.value = true
-    await player.setStageConfig({ scene: props.scene, night: props.night })
+    loadState.value = 'ready'
     player.setAmbient({ stageKey: props.stageKey, illness: props.illness, dead: props.dead })
     // 尺寸自适应：观察画布自身（随布局/旋转/全屏变化）
     resizeObserver = new ResizeObserver(() => player.resize())
@@ -76,9 +77,12 @@ onMounted(async () => {
     requestAnimationFrame(() => player.resize())
     emit('bones-ready', player)
   } else {
-    player.dispose()
+    // WebGL 或指定建模不可用：错误遮罩（不降级、不换模型）
+    loadState.value = 'error'
+    if (!loadError.value) {
+      loadError.value = '3D 引擎初始化失败，当前环境不支持 WebGL'
+    }
   }
-  // WebGL 或模型不可用：bonesMode 保持 false，模板渲染 SVG 降级
 })
 
 onBeforeUnmount(() => {
@@ -90,38 +94,57 @@ onBeforeUnmount(() => {
 watch(
   () => props.species,
   (sp) => {
-    if (bonesMode.value && sp) player.setSpecies(sp)
+    if (loadState.value === 'ready' && sp) player.setSpecies(sp)
   }
 )
 watch(
   () => [props.stageKey, props.illness, props.dead],
   ([stageKey, illness, dead]) => {
-    if (bonesMode.value) player.setAmbient({ stageKey, illness, dead })
+    if (loadState.value === 'ready') player.setAmbient({ stageKey, illness, dead })
   }
 )
 watch(
   () => [props.scene, props.night],
   ([sc, night]) => {
-    if (bonesMode.value) player.setStageConfig({ scene: sc, night })
+    if (loadState.value === 'ready') player.setStageConfig({ scene: sc, night })
   }
 )
 
 function onDockDragStart(itemId) {
   player.setDragging(itemId)
 }
+
+// 错误遮罩的刷新重试：整页重载，重新走加载流程
+function reload() {
+  window.location.reload()
+}
 </script>
 
 <template>
   <div class="screen b3d" :class="{ 'is-fullscreen': fullscreen }">
-    <!-- 3D 画布（Babylon.js：宠物/场景/物理投掷；SVG 降级时透明不可见） -->
+    <!-- 3D 画布（Babylon.js：宠物/场景/物理投掷，始终渲染） -->
     <canvas
       ref="canvasEl"
       class="pet-canvas"
       :title="dead ? '' : `轻点 ${petName} 摸摸它 · 轻点地面让它走过去`"
     />
 
-    <!-- SVG 降级背景（WebGL 不可用） -->
-    <SceneBackdrop v-if="!bonesMode" :scene="scene" :night="night" />
+    <!-- 加载等待遮罩：建模与场景加载完毕前常驻；失败转为错误提示（无降级） -->
+    <transition name="fade">
+      <div v-if="loadState !== 'ready'" class="load-mask" role="status">
+        <template v-if="loadState === 'loading'">
+          <span class="load-spinner" aria-hidden="true"></span>
+          <p class="load-title">正在搭建 3D 世界…</p>
+          <p class="load-sub">加载{{ species?.name || '宠物' }}的建模与场景</p>
+        </template>
+        <template v-else>
+          <span class="load-emoji" aria-hidden="true">😿</span>
+          <p class="load-title">3D 世界加载失败</p>
+          <p class="load-sub">{{ loadError }}</p>
+          <button class="load-retry" type="button" @click="() => reload()">刷新重试</button>
+        </template>
+      </div>
+    </transition>
 
     <!-- 顶部状态胶囊 -->
     <div class="chips">
@@ -146,27 +169,13 @@ function onDockDragStart(itemId) {
       {{ fullscreen ? '✕' : '⛶' }}
     </button>
 
-    <!-- 道具坞：拖拽投掷（3D 模式专属交互） -->
+    <!-- 道具坞：拖拽投掷（3D 就绪后可用） -->
     <ItemDock
-      v-if="bonesMode && !dead"
+      v-if="loadState === 'ready' && !dead"
       :disabled="coma"
       :cooldowns="cooldowns"
       @drag-start="onDockDragStart"
     />
-
-    <!-- SVG 降级宠物（WebGL 不可用） -->
-    <div v-if="!bonesMode" class="pet-wrap" :title="dead ? '' : `摸摸 ${petName}`">
-      <PetAvatar
-        :species="species"
-        :stage-key="stageKey"
-        :mood="mood"
-        :behavior="behavior"
-        :dead="dead"
-        :coma="coma"
-        :asleep="asleep"
-        :illness="illness"
-      />
-    </div>
 
     <!-- 睡眠 Zzz -->
     <template v-if="asleep && !dead">
@@ -186,5 +195,74 @@ function onDockDragStart(itemId) {
 }
 .fade-leave-to {
   opacity: 0;
+}
+</style>
+
+<style>
+/* 加载等待遮罩（全局样式：b3d 组件样式表中已有 .screen 定义） */
+.load-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(8, 24, 26, 0.88), rgba(4, 14, 16, 0.94));
+  color: #d7fff2;
+  text-align: center;
+  padding: 24px;
+}
+
+.load-spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 4px solid rgba(64, 224, 180, 0.25);
+  border-top-color: #40e0b4;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 6px;
+}
+
+.load-emoji {
+  font-size: 42px;
+  margin-bottom: 2px;
+}
+
+.load-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.load-sub {
+  margin: 0;
+  font-size: 12.5px;
+  opacity: 0.75;
+  max-width: 320px;
+  line-height: 1.6;
+}
+
+.load-retry {
+  margin-top: 10px;
+  padding: 8px 22px;
+  border: 1.5px solid #40e0b4;
+  border-radius: 999px;
+  background: transparent;
+  color: #40e0b4;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.load-retry:hover {
+  background: rgba(64, 224, 180, 0.12);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

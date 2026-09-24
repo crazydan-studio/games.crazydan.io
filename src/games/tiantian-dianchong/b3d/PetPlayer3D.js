@@ -1,8 +1,10 @@
 // ============ 电宠 3D 渲染器（Babylon.js） ============
 // 消费动作系统的生命周期事件（play/move），把指令的结果实时渲染为 3D 动画：
-//   · 宠物模型：public/assets/b3d/ 的 Quaternius CC0 GLB（骨骼动画）
-//   · 自定义/AI 物种：通用狐狸身体 + look.body 染色
+//   · 宠物模型：public/assets/b3d/ 的 CC0 GLB（骨骼动画）
+//     —— 宠物建模 = Quaternius Ultimate Animated Animals
+//     —— 怪兽建模 = Quaternius Ultimate Monsters
 //   · 场景：stage3d 依据 core/scenes.js 场景定义搭建（地面/墙/道具/昼夜光照）
+//     —— 室内场景道具 = KayKit Restaurant Bits
 //   · 游戏化交互（常见 3D 宠物游戏模式）：
 //       - 轻点宠物 → 抚摸（爱心粒子 + onPetTouch）
 //       - 轻点地面 → 走过去（onGroundClick → move 指令）
@@ -19,7 +21,10 @@
 //   · 骨骼网格克隆必须同步克隆 Skeleton 与 AnimationGroup（targetConverter 按骨骼名映射），
 //     否则多实例共享旧骨架状态 → 动画错乱
 //   · scene.pick / createPickingRay 的屏幕坐标 = clientXY 减画布 rect（勿直接用 clientXY）
-//   · WebGL 不可用时 init() 返回 false，由上层降级为 SVG 宠物（PetAvatar）
+//
+// ⚠ 不做建模降级/回退：物种必须绑定 PET_MODELS 白名单模型，
+//   无效绑定或加载失败 → setSpecies 返回 false，由上层以加载失败呈现（等待遮罩/错误），
+//   绝不静默替换为其他模型；WebGL 初始化失败同理（init 返回 false，无 SVG 降级）
 
 import { Engine } from '@babylonjs/core/Engines/engine'
 import { Scene } from '@babylonjs/core/scene'
@@ -38,7 +43,7 @@ import { PET_MODELS, THROW_ITEMS, modelKeyOf, assetBaseUrl } from './assets.js'
 import { resolveAnim } from './animationMap.js'
 import {
   importGlb, loadSceneProps, setupLighting, buildFence, buildClouds, buildStarsAndMoon,
-  buildCityline, buildBall, heartTextureOf, hexToColor3,
+  buildCityline, buildBall, heartTextureOf, hexToColor3, disposeMeshCache,
   STAGE_HALF, PET_Z, WALL_Z, ROOM_SCENES, stageXToWorld, worldToStageX
 } from './stage3d.js'
 
@@ -154,7 +159,7 @@ export function createB3dPetPlayer() {
       ready = true
     } catch (e) {
       ready = false
-      console.warn('[dianchong] WebGL 初始化失败，将降级为 SVG 宠物：', e)
+      console.error('[dianchong] WebGL 初始化失败（不做降级，上层将显示错误遮罩）：', e)
       try { engine?.dispose() } catch { /* ignore */ }
       engine = null
       scene = null
@@ -261,7 +266,14 @@ export function createB3dPetPlayer() {
   // ---- 物种装配 ----
   async function setSpecies(sp) {
     if (!ready || !sp) return false
-    const { key, tint } = modelKeyOf(sp)
+    // 严格解析：物种必须绑定 PET_MODELS 白名单模型（无回退，无效直接失败）
+    let key
+    try {
+      key = modelKeyOf(sp).key
+    } catch (e) {
+      console.error('[dianchong] 物种建模绑定无效：', e)
+      return false
+    }
     const def = PET_MODELS[key]
     disposePet()
     family = def.family
@@ -270,7 +282,7 @@ export function createB3dPetPlayer() {
     try {
       pack = await importGlb(new URL(def.file, assetBaseUrl()).href, scene)
     } catch (e) {
-      console.warn('[dianchong] 宠物模型加载失败：', key, e)
+      console.error('[dianchong] 宠物模型加载失败：', key, e)
       return false
     }
 
@@ -297,7 +309,6 @@ export function createB3dPetPlayer() {
       m.receiveShadows = false
       shadowGen?.addShadowCaster(m)
     }
-    if (tint) applyTint(petMeshes, tint)
 
     // 停全部动画 → idle
     for (const g of animGroups) g.stop()
@@ -313,18 +324,6 @@ export function createB3dPetPlayer() {
     updateDebug()
     return true
   }
-  function applyTint(meshes, hex) {
-    const c = hexToColor3(hex)
-    for (const m of meshes) {
-      const mat = m.material
-      if (!mat) continue
-      try {
-        if ('albedoColor' in mat) mat.albedoColor = c
-        else if ('diffuseColor' in mat) mat.diffuseColor = c
-      } catch { /* ignore */ }
-    }
-  }
-
   function disposePet() {
     if (!petRoot) return
     try { petRoot.dispose(false, true) } catch { /* ignore */ }
@@ -732,6 +731,10 @@ export function createB3dPetPlayer() {
     try { stageRoot?.dispose(false, true) } catch { /* ignore */ }
     try { hearts?.dispose() } catch { /* ignore */ }
     try { engine?.dispose() } catch { /* ignore */ }
+    // ⚠ meshCache 是模块级缓存，其中的网格属于当前（即将销毁的）scene；
+    //   不清空的话，重新领养/重挂载后新 scene 从旧缓存克隆出的网格不会注册进
+    //   新 scene（可见节点存在但不渲染 → 道具全部消失）。销毁时必须连同清空。
+    disposeMeshCache()
     engine = null
     scene = null
     camera = null

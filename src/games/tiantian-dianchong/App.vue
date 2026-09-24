@@ -2,9 +2,9 @@
 // ============ 天天电宠 · 应用编排 ============
 // 指令驱动三层架构的接线中枢：
 //   生命系统(lifeRuntime) ─┐
-//   交互系统(interactions) ─┼→ 指令总线(bus) → 动作系统(actionSystem) → 骨骼动画(player)
-//                          │                   └→ SVG 降级（无 WebGL 时）
+//   交互系统(interactions) ─┼→ 指令总线(bus) → 动作系统(actionSystem) → 3D 渲染(player)
 // 持久化（5s 防抖 + 离开即存）+ 存档导入导出 + 离线结算摘要 + 死亡纪念。
+// 3D 不做降级/回退：加载完毕前 PetStage 显示等待遮罩，失败显示错误遮罩。
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import PetStage from './components/PetStage.vue'
 import StatusPanel from './components/StatusPanel.vue'
@@ -31,7 +31,6 @@ import { fmtGameTime, periodNow, dayOf } from './core/time.js'
 // ---- 全局状态 ----
 const save = ref(null)
 const customSpeciesLib = ref({}) // 重新领养时保留已生成物种库
-const svgBehavior = ref('idle') // SVG 降级模式的行为（骨骼动画模式不使用）
 const bubble = ref(null)
 const toasts = ref([])
 const settingsOpen = ref(false)
@@ -45,7 +44,6 @@ let bubbleTimer = null
 let lifeTimer = null
 let persistTimer = null
 let behaviorTimer = null
-let fallbackTickTimer = null
 let aiFailCount = 0
 let aiCooldownUntil = 0
 let lastTouchAt = 0
@@ -152,25 +150,15 @@ function setBubble(text, ai = false) {
 }
 
 // ============================================================
-// 系统接线：指令总线 → 动作系统 → 渲染（骨骼动画 / SVG 降级）
+// 系统接线：指令总线 → 动作系统 → 3D 渲染
 // ============================================================
-
-// 动作 → SVG 降级行为（PetAvatar CSS 动画词汇）
-const ACTION_TO_SVG = {
-  idle: 'idle', wander: 'wander', stare: 'stare', beg: 'beg', groom: 'groom',
-  sleep: 'sleep', wake: 'sleep', eat: 'beg', snack: 'beg', play: 'play',
-  bathe: 'groom', medicine: 'beg', pet: 'beg', happy: 'play', sad: 'idle',
-  shiver: 'idle', coma: 'sleep', dead: 'idle'
-}
 
 function handleActionEvent(ev) {
   if (ev.type === ACTION_EVENT.START) {
     player?.play(ev.anim, ev.loop)
-    svgBehavior.value = ACTION_TO_SVG[ev.action] || 'idle'
   } else if (ev.type === ACTION_EVENT.MOVE) {
     player?.play(ev.anim || 'walk', true)
     player?.moveTo(ev.targetX)
-    svgBehavior.value = 'wander'
   }
 }
 
@@ -239,12 +227,6 @@ function onPlayerReady(instance) {
     if (snap.anim) player.play(snap.anim, snap.loop)
     if (snap.moving) player.moveTo(snap.targetX)
   }
-}
-
-// SVG 降级模式：动作时间推进由兜底定时器驱动
-function startFallbackTick() {
-  clearInterval(fallbackTickTimer)
-  fallbackTickTimer = setInterval(() => actionSystem?.tick(), 250)
 }
 
 // ---- 生命引擎事件（日志 / 弹层） ----
@@ -469,13 +451,11 @@ function startLoops() {
     if (save.value) persistSave(save.value)
   }, 5000)
   scheduleBehavior()
-  if (!player) startFallbackTick() // SVG 降级：动作时长由定时器推进
 }
 
 function stopLoops() {
   clearInterval(lifeTimer)
   clearInterval(persistTimer)
-  clearInterval(fallbackTickTimer)
   clearTimeout(behaviorTimer)
 }
 
@@ -564,7 +544,6 @@ window.addEventListener('beforeunload', () => {
           :species="species"
           :stage-key="stage.key"
           :mood="pet.mood"
-          :behavior="svgBehavior"
           :dead="pet.dead"
           :coma="pet.coma"
           :asleep="asleep"
