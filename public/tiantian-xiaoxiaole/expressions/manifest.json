@@ -1,40 +1,40 @@
 {
   "app": "tiantian-match",
-  "name": "天天表情包（示例）",
+  "name": "天天表情包",
   "version": 1,
-  "exportedAt": "2026-09-22T05:43:28.722Z",
+  "exportedAt": "2026-09-24T07:05:49.823Z",
+  "slots": [
+    "images/tiantian-001.png",
+    "images/tiantian-002.png",
+    "images/tiantian-003.png",
+    "images/tiantian-005.png",
+    "images/tiantian-006.png",
+    "images/tiantian-004.png"
+  ],
   "items": [
     {
-      "file": "images/face-01.svg",
-      "name": "天天·开心"
+      "file": "images/tiantian-001.png",
+      "name": "天天 12:56"
     },
     {
-      "file": "images/face-02.svg",
-      "name": "天天·惊讶"
+      "file": "images/tiantian-002.png",
+      "name": "天天 13:24"
     },
     {
-      "file": "images/face-03.svg",
-      "name": "天天·犯困"
+      "file": "images/tiantian-003.png",
+      "name": "天天 14:09"
     },
     {
-      "file": "images/face-04.svg",
-      "name": "天天·调皮"
+      "file": "images/tiantian-004.png",
+      "name": "天天 14:15"
     },
     {
-      "file": "images/face-05.svg",
-      "name": "天天·生气"
+      "file": "images/tiantian-005.png",
+      "name": "天天 15:01"
     },
     {
-      "file": "images/face-06.svg",
-      "name": "天天·撒娇"
+      "file": "images/tiantian-006.png",
+      "name": "天天 15:04"
     }
-  ],
-  "slots": [
-    "images/face-01.svg",
-    "images/face-02.svg",
-    "images/face-03.svg",
-    "images/face-04.svg",
-    "images/face-05.svg",
-    "images/face-06.svg"
   ]
 }
