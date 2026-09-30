@@ -328,4 +328,48 @@ function buildGrid2(types, rows, cols) {
   )
 }
 
+// ---------- 15. 关卡进度持久化（store/progress.js + localStorage 桩） ----------
+{
+  // progress.js 只在函数内访问 localStorage（模块顶层无副作用），先注入桩再导入
+  const store = new Map()
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k)
+  }
+  const { loadLevel, saveLevel, resetLevel } = await import(
+    '../src/games/tiantian-xiaoxiaole/store/progress.js'
+  )
+
+  ok(loadLevel() === 1, '关卡进度：无记录 → 第 1 关')
+  saveLevel(7)
+  ok(loadLevel() === 7, '关卡进度：写入后读取回环（第 7 关）')
+  store.set('ttxsl-level', 'abc')
+  ok(loadLevel() === 1, '关卡进度：脏数据（非数字）→ 回落第 1 关')
+  store.set('ttxsl-level', '-5')
+  ok(loadLevel() === 1, '关卡进度：负数 → 钳制第 1 关')
+  store.set('ttxsl-level', '0')
+  ok(loadLevel() === 1, '关卡进度：0 → 钳制第 1 关')
+  store.set('ttxsl-level', '2.9')
+  ok(loadLevel() === 2, '关卡进度：小数 → 向下取整')
+  store.set('ttxsl-level', '99999')
+  ok(loadLevel() === 9999, '关卡进度：超上限 → 钳制 9999')
+  saveLevel(12)
+  ok(resetLevel() === 1 && loadLevel() === 1, '关卡进度：resetLevel 清零回第 1 关')
+  // 存储不可用（隐私模式等）：读取回落、写入/重置静默失败不抛错
+  globalThis.localStorage = {
+    getItem: () => {
+      throw new Error('denied')
+    },
+    setItem: () => {
+      throw new Error('denied')
+    }
+  }
+  ok(loadLevel() === 1, '关卡进度：存储异常 → 读取回落第 1 关')
+  saveLevel(9)
+  resetLevel()
+  ok(true, '关卡进度：存储异常 → 写入/重置不抛错')
+  delete globalThis.localStorage
+}
+
 console.log(`\n全部 ${passed} 项引擎测试通过 ✅`)

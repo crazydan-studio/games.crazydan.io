@@ -15,6 +15,7 @@ import { playSound } from '../utils/sound'
 import { toast } from '../utils/toast'
 import { uiState } from '../store/ui'
 import { settings, boardDims } from '../store/settings'
+import { loadLevel, saveLevel } from '../store/progress'
 
 const SWAP_MS = 200 // 交换动画
 const POP_MS = 300 // 消除动画
@@ -36,7 +37,9 @@ export function createGame(mode) {
   const tiles = reactive([]) // 渲染用扁平列表，元素与 grid 中共用同一对象
   const score = ref(0)
   const moves = ref(MOVES_PER_LEVEL)
-  const level = ref(1)
+  // 经典闯关：从 localStorage 记录的关卡继续（刷新不回第 1 关）；
+  // 限时模式无关卡概念，恒为 1
+  const level = ref(mode === 'classic' ? loadLevel() : 1)
   const timeLeft = ref(TIME_LIMIT)
   const best = ref(Number(localStorage.getItem('ttxsl-best') || 0))
   const state = ref('idle') // idle | busy | clear | over
@@ -127,6 +130,7 @@ export function createGame(mode) {
 
   function nextLevel() {
     level.value += 1
+    saveLevel(level.value) // 自动记录：通关推进即写入，刷新后从这一关继续
     resetRound()
   }
 

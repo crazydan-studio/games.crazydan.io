@@ -9,7 +9,7 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| 经典闯关 | 25 步内达到目标分即通关，无限关卡，三星评价 |
+| 经典闯关 | 25 步内达到目标分即通关，无限关卡，三星评价；当前关卡自动记录（localStorage），刷新页面后从这一关继续，不再从第 1 关重来 |
 | 限时挑战 | 60 秒内尽量多得分，本地记录最高分 |
 | URL 锚点路由 | `#classic` / `#time` 直达对应模式，浏览器回退/前进在家屏与游戏屏间切换 |
 | 提示 | 矩阵下方常驻「提示」按钮（点击后高亮一对可消除块，约 2.6 秒自动熄灭），始终可用 |
@@ -45,7 +45,7 @@ pnpm install
 #   门户 http://localhost:5173/ ，本游戏 http://localhost:5173/tiantian-xiaoxiaole/
 pnpm dev                      # 在仓库根执行
 
-# 引擎单元测试（纯逻辑，24 项断言，含 6×8 非方阵棋盘用例）
+# 引擎单元测试（纯逻辑，34 项断言，含 6×8 非方阵棋盘与关卡进度持久化用例）
 pnpm test
 
 # 重新生成示例表情包静态资源（可选，仓库已含产物）
@@ -160,6 +160,7 @@ expressions/
 | 6 个元素槽位 | localStorage `ttxsl-slots-v1` | 指向表情 id |
 | 游戏设置 | localStorage `ttxsl-settings-v1` | 提示/角标/矩阵，见 `store/settings.js` |
 | 限时模式最高分 | localStorage `ttxsl-best` | |
+| 经典闯关当前关卡 | localStorage `ttxsl-level` | 通关推进时写入，刷新后从这一关继续，见 `store/progress.js` |
 | 静音开关 | localStorage `ttxsl-muted` | |
 | 特殊块教学提示标记 | localStorage `ttxsl-seen-bomb/rainbow` | 仅首次弹 toast |
 | 应用壳静态资源 | CacheStorage `ttxsl-cache-v2` | PWA 离线可玩 |
@@ -180,7 +181,7 @@ expressions/
 │   └── expressions/          # 示例表情包（静态资源部署契约）
 ├── scripts/                  # 以下脚本位于仓库根 scripts/ 目录
 │   ├── gen-sample-pack.mjs   # 生成示例表情包
-│   └── test-engine.mjs       # 引擎单元测试（24 项断言）
+│   └── test-engine.mjs       # 引擎单元测试（34 项断言）
 └── src/games/tiantian-xiaoxiaole/
     ├── index.html            # 入口页（manifest + apple-touch-icon meta；加载前写入 nl-hud 键；线上 /tiantian-xiaoxiaole/，由 gamePages 插件映射）
     ├── main.js / App.vue     # 应用壳：#classic/#time 锚点路由 + SW 注册 + 缓存补热
@@ -192,6 +193,7 @@ expressions/
     ├── store/
     │   ├── expressions.js    # 表情库 + 槽位（IndexedDB 持久化）
     │   ├── settings.js       # 游戏设置（提示/角标/矩阵大小，localStorage 持久化）
+    │   ├── progress.js       # 关卡进度（localStorage 持久化，刷新续关）
     │   ├── pwa.js            # PWA 状态（离线徽章/安装提示）
     │   └── ui.js             # 全局 UI 状态（弹窗暂停计时）
     ├── utils/
