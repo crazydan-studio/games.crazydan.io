@@ -7,12 +7,25 @@ import Modal from './Modal.vue'
 import { expressions, slots } from '../store/expressions'
 import { pwaState, promptInstall } from '../store/pwa'
 import { settings, updateSettings, BOARD_PRESETS } from '../store/settings'
+import { loadLevel, resetLevel } from '../store/progress'
+import { toast } from '../utils/toast'
 
 defineEmits(['start', 'camera', 'manage'])
 
 const usedCount = computed(() => slots.value.filter(Boolean).length)
 
 const showSettings = ref(false)
+
+// 经典闯关进度：组件随屏幕切换重建时重读（进游戏回来即同步最新关卡）
+const classicLevel = ref(loadLevel())
+
+// 从第 1 关重新开始（清零关卡进度）
+function onResetProgress() {
+  if (classicLevel.value <= 1) return
+  if (!window.confirm(`从第 1 关重新开始闯关？当前进度（第 ${classicLevel.value} 关）将清零。`)) return
+  classicLevel.value = resetLevel()
+  toast('已从第 1 关重新开始')
+}
 
 async function onInstall() {
   const ok = await promptInstall()
@@ -44,7 +57,7 @@ function emitHint() {
     <div class="menu">
       <button class="menu-btn primary" @click="$emit('start', 'classic')">
         <Icon name="play" />
-        <span>经典闯关</span>
+        <span>{{ classicLevel > 1 ? `继续闯关 · 第 ${classicLevel} 关` : '经典闯关' }}</span>
       </button>
       <button class="menu-btn accent" @click="$emit('start', 'time')">
         <Icon name="clock" />
@@ -164,6 +177,20 @@ function emitHint() {
               <span>{{ p.matrix }}</span>
             </button>
           </div>
+        </div>
+
+        <div class="set-row">
+          <div class="set-text">
+            <b>关卡进度</b>
+            <i>当前第 {{ classicLevel }} 关 · 刷新页面后自动从这一关继续</i>
+          </div>
+          <button
+            class="btn ghost tiny reset-btn"
+            :disabled="classicLevel <= 1"
+            @click="onResetProgress"
+          >
+            从第 1 关重来
+          </button>
         </div>
 
         <button class="btn primary" @click="showSettings = false">完成</button>
@@ -588,6 +615,17 @@ button.pwa-chip.install {
 
 .settings > .btn {
   align-self: stretch;
+}
+
+/* 关卡进度重置按钮：不换行、禁用态降透明度 */
+.set-row .reset-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.set-row .reset-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 @media (max-width: 420px) {
