@@ -1,5 +1,5 @@
 // ============ 游戏状态机（Vue 组合式函数） ============
-// 负责动画时序编排、计分/连击、关卡进度、限时模式与提示
+// 负责动画时序编排、计分/连击与连消奖励、关卡进度、限时模式与提示
 // 以及特殊块（炸弹猫 / 彩虹猫）的诞生、激活与连锁
 import { reactive, ref, computed } from 'vue'
 import {
@@ -9,7 +9,8 @@ import {
   swapCells,
   collapseColumns,
   reshuffleTypes,
-  expandSpecials
+  expandSpecials,
+  comboBonusOf
 } from './engine'
 import { playSound } from '../utils/sound'
 import { toast } from '../utils/toast'
@@ -188,17 +189,42 @@ export function createGame(mode) {
     }, 950)
   }
 
+  // 返回本波基础分之和（未乘连锁乘数），供连消奖励计算
   function applyScore(groups, combo) {
-    let gained = 0
-    for (const g of groups) gained += groupPoints(g)
-    gained *= combo
-    score.value += gained
+    let raw = 0
+    for (const g of groups) raw += groupPoints(g)
+    score.value += raw * combo
     for (const g of groups) {
       const cx = g.cells.reduce((s, cell) => s + cell.c, 0) / g.cells.length
       const cy = g.cells.reduce((s, cell) => s + cell.r, 0) / g.cells.length
       const pts = groupPoints(g) * combo
       pushPopup(cy, cx, `+${pts}${combo > 1 ? ` ×${combo}` : ''}`)
     }
+    return raw
+  }
+
+  // 连消奖励：连锁第 2 波起每波额外加分，波数越多、本波基础分越高 → 奖励越高
+  // （规则见 engine.js comboBonusOf；叠加在既有 × 波次乘数之上）
+  // 飘字挂在整波消除区的质心上方，与各簇「+分」飘字错开
+  function applyComboBonus(raw, groups, combo) {
+    const bonus = comboBonusOf(raw, combo)
+    if (bonus <= 0) return 0
+    score.value += bonus
+    let sr = 0
+    let sc = 0
+    let n = 0
+    for (const g of groups) {
+      for (const cell of g.cells) {
+        sr += cell.r
+        sc += cell.c
+        n++
+      }
+    }
+    if (n > 0) {
+      const r = Math.max(0, Math.min(ROWS - 1, sr / n - 0.7))
+      pushPopup(r, sc / n, `连消奖励 +${bonus}`)
+    }
+    return bonus
   }
 
   // 特殊块连锁的计分与飘字（炸弹 +120 / 被波及的彩虹猫 +40×格数）
@@ -273,7 +299,8 @@ export function createGame(mode) {
       if (!groups.length) break
       combo++
       comboNow.value = combo
-      applyScore(groups, combo)
+      const raw = applyScore(groups, combo)
+      applyComboBonus(raw, groups, combo)
 
       // 基础消除格 + 特殊块转化（特殊块在出生点诞生，不参与本轮消除）
       const baseCells = []

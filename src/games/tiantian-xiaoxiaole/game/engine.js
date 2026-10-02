@@ -10,6 +10,10 @@
 // 特殊块诞生规则：
 //   · 单线正好 4 连            → 炸弹猫（在玩家落子位 / 线中点诞生）
 //   · 单线 ≥5 连 或 L/T 交叉 ≥5 → 彩虹猫（在交叉点 / 线中点诞生）
+//
+// 计分规则（纯函数，供状态机 useGame.js 调用）：
+//   · 连消（连锁）从第 2 波起，每波在「基础分 × 波次」乘数之外额外给予奖励分，
+//     波数越多、本波基础分越高，奖励分越高（见文件末尾 comboBonusOf）
 
 export const BOARD_SIZE = 8 // 默认棋盘尺寸（引擎函数自身从 grid 读取行列数）
 export const ELEMENT_COUNT = 6
@@ -408,4 +412,19 @@ export function reshuffleTypes(grid) {
     if (findPossibleMove(grid)) return true
   }
   return false
+}
+
+// ---------- 连消奖励分 ----------
+// 连消（连锁消除）从第 2 波起，每一波在既有「基础分 × 波次」乘数之外额外给予奖励分：
+//   奖励 = 固定成长部分 30 ×（波次 − 1） + 本波基础分 × 25% ×（波次 − 1）
+// 即连消波数越多、本波消除的基础分越高，奖励分就越高；首波（玩家直接匹配）无奖励。
+// 炸弹/彩虹等特殊块的触发分不计入基础分基数（它们各自已享受 × 波次乘数）。
+export const COMBO_BONUS_STEP = 30 // 每多一波的固定奖励增量
+export const COMBO_BONUS_RATE = 0.25 // 奖励随本波基础分浮动的比例
+
+export function comboBonusOf(rawBase, combo) {
+  if (!Number.isFinite(rawBase) || rawBase < 0) return 0
+  if (!Number.isFinite(combo) || combo < 2) return 0
+  const waves = Math.floor(combo) - 1 // 连消波次（第 2 波起算 1）
+  return COMBO_BONUS_STEP * waves + Math.round(rawBase * COMBO_BONUS_RATE * waves)
 }

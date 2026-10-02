@@ -1,5 +1,5 @@
 // ============ 引擎单元测试（Node 直接运行，无浏览器依赖） ============
-// 覆盖：特殊块判定（4连炸弹/5连彩虹/L形交叉）、连锁展开、可行步、洗牌保护
+// 覆盖：特殊块判定（4连炸弹/5连彩虹/L形交叉）、连锁展开、可行步、洗牌保护、连消奖励分
 import assert from 'node:assert'
 import {
   BOARD_SIZE,
@@ -9,7 +9,10 @@ import {
   expandSpecials,
   findPossibleMove,
   reshuffleTypes,
-  swapCells
+  swapCells,
+  comboBonusOf,
+  COMBO_BONUS_STEP,
+  COMBO_BONUS_RATE
 } from '../src/games/tiantian-xiaoxiaole/game/engine.js'
 
 let passed = 0
@@ -370,6 +373,25 @@ function buildGrid2(types, rows, cols) {
   resetLevel()
   ok(true, '关卡进度：存储异常 → 写入/重置不抛错')
   delete globalThis.localStorage
+}
+
+// ---------- 16. 连消奖励分（comboBonusOf 纯函数） ----------
+{
+  ok(comboBonusOf(30, 1) === 0, '连消奖励：首波（玩家直接匹配）无奖励')
+  ok(comboBonusOf(30, 0) === 0 && comboBonusOf(30, -3) === 0, '连消奖励：非连消波次（0/负数）恒为 0')
+  ok(comboBonusOf(30, 2) === 38, '连消奖励：2 波基础 30 → 30 + round(30×25%) = 38')
+  ok(comboBonusOf(30, 3) === 75, '连消奖励：3 波基础 30 → 60 + 15 = 75')
+  ok(comboBonusOf(30, 5) === 150, '连消奖励：5 波基础 30 → 120 + 30 = 150')
+  const byWave = [2, 3, 4, 5, 6].map((n) => comboBonusOf(30, n))
+  ok(byWave.every((v, i) => i === 0 || v > byWave[i - 1]), '连消奖励：波数越多 → 奖励单调递增')
+  const byBase = [30, 60, 90, 120].map((b) => comboBonusOf(b, 3))
+  ok(byBase.every((v, i) => i === 0 || v > byBase[i - 1]), '连消奖励：本波基础分越多 → 奖励单调递增')
+  ok(
+    comboBonusOf(100, 4) === COMBO_BONUS_STEP * 3 + Math.round(100 * COMBO_BONUS_RATE * 3),
+    '连消奖励：公式 = 固定增量×(波次−1) + 基础分×比例×(波次−1)'
+  )
+  ok(comboBonusOf(-50, 3) === 0 && comboBonusOf(NaN, 3) === 0, '连消奖励：非法基础分（负数/NaN）→ 0')
+  ok(comboBonusOf(60, 2.9) === comboBonusOf(60, 2), '连消奖励：非整数波次向下取整（2.9 → 2 波档）')
 }
 
 console.log(`\n全部 ${passed} 项引擎测试通过 ✅`)
