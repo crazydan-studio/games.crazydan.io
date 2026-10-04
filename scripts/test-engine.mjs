@@ -19,7 +19,8 @@ import {
   BOMB_BONUS_BASE,
   BOMB_BONUS_PER_CELL,
   RAINBOW_BONUS_PER_CELL,
-  SUPER_RAINBOW_BONUS_PER_CELL
+  SUPER_RAINBOW_BONUS_PER_CELL,
+  findBestMove
 } from '../src/games/tiantian-xiaoxiaole/game/engine.js'
 
 let passed = 0
@@ -424,6 +425,115 @@ function buildGrid2(types, rows, cols) {
   // 引擎常量与 useGame 计分口径一致性：炸弹 60+15n、彩虹 40n、双彩虹 50n
   ok(BOMB_BONUS_BASE === 60 && BOMB_BONUS_PER_CELL === 15, '炸弹奖励常量：登场 60 + 15/格')
   ok(RAINBOW_BONUS_PER_CELL === 40 && SUPER_RAINBOW_BONUS_PER_CELL === 50, '彩虹奖励常量：普通 40/格、双彩虹 50/格')
+}
+
+// ---------- 18. 提示：最高分支优先（findBestMove） ----------
+// 棋盘 A：3 连机会（行 0 的 5）与 5 连机会（行 6 的 9 + (5,3)）并存
+function buildBoardA() {
+  const rows = Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, c) => (r * 8 + c) % 6))
+  rows[0][1] = 5
+  rows[0][2] = 5
+  rows[5][3] = 9
+  rows[6][1] = 9
+  rows[6][2] = 9
+  rows[6][4] = 9
+  rows[6][5] = 9
+  return buildGrid(rows)
+}
+
+{
+  // 18a. 5 连（90 分）分支优先于 3 连（30 分）分支
+  const g = buildBoardA()
+  const mv = findBestMove(g)
+  ok(mv && mv.r === 5 && mv.c === 3 && mv.r2 === 6 && mv.c2 === 3, '提示指向 5 连分支而非 3 连分支（最高分支优先）')
+  // 18b. 返回的分支真实可行：落子后确实成簇
+  swapCells(g, mv.r, mv.c, mv.r2, mv.c2)
+  const groups = findMatchGroups(g)
+  ok(groups.some((x) => x.type === 9 && x.cells.length === 5), '提示分支落子后形成 5 连（可行步）')
+  swapCells(g, mv.r, mv.c, mv.r2, mv.c2)
+  // 18c. 结果确定性：同盘两次调用结果一致（便于测试与回归）
+  const again = findBestMove(g)
+  ok(
+    again && again.r === mv.r && again.c === mv.c && again.r2 === mv.r2 && again.c2 === mv.c2,
+    '提示结果确定：同盘重复调用返回同一分支'
+  )
+}
+
+{
+  // 18d. 彩虹猫分支：优先配「在场数量最多」的同款类型
+  const types = Array.from({ length: 8 }, () => Array(8).fill(null))
+  types[0][0] = [-1, 'rainbow']
+  types[0][1] = 5 // 类型 5 仅 1 个 → 40×2 = 80
+  types[1][0] = 2 // 类型 2 共 7 个 → 40×8 = 320
+  types[3][0] = 2
+  types[5][0] = 2
+  types[7][0] = 2
+  types[3][2] = 2
+  types[5][2] = 2
+  types[7][2] = 2
+  const g = buildGrid(types)
+  const mv = findBestMove(g)
+  ok(mv && mv.r === 0 && mv.c === 0 && mv.r2 === 1 && mv.c2 === 0, '彩虹猫提示配同款最多的邻居（大部队分支）')
+}
+
+{
+  // 18e. 双彩虹分支合金量最高：压过普通 3 连
+  const types = Array.from({ length: 8 }, () => Array(8).fill(null))
+  types[0][0] = [-1, 'rainbow']
+  types[0][1] = [-1, 'rainbow']
+  types[5][3] = 1
+  types[5][4] = 1
+  types[5][6] = 1
+  types[5][5] = 2 // 交换 (5,5)↔(5,6) 可成 3 连（30 分）
+  const g = buildGrid(types)
+  const mv = findBestMove(g)
+  ok(mv && mv.r === 0 && mv.c === 0 && mv.r2 === 0 && mv.c2 === 1, '双彩虹分支估值最高（全场清空档）')
+}
+
+{
+  // 18f. 炸弹对分支压过普通 3 连
+  const types = Array.from({ length: 8 }, () => Array(8).fill(null))
+  types[0][0] = [0, 'bomb']
+  types[0][1] = [1, 'bomb']
+  types[5][3] = 1
+  types[5][4] = 1
+  types[5][6] = 1
+  types[5][5] = 2
+  const g = buildGrid(types)
+  const mv = findBestMove(g)
+  ok(mv && mv.r === 0 && mv.c === 0 && mv.r2 === 0 && mv.c2 === 1, '炸弹对分支（双双引爆）优先于 3 连')
+}
+
+{
+  // 18g. 彩虹猫配炸弹：同款炸弹连环引爆计入估值
+  const types = Array.from({ length: 8 }, () => Array(8).fill(null))
+  types[0][0] = [-1, 'rainbow']
+  types[0][1] = 5 // 配普通 5 → 40×2 = 80
+  types[1][0] = [2, 'bomb'] // 配炸弹 → 40×8 + 120 = 440
+  types[3][0] = 2
+  types[5][0] = 2
+  types[7][0] = 2
+  types[3][2] = 2
+  types[5][2] = 2
+  types[7][2] = 2
+  const g = buildGrid(types)
+  const mv = findBestMove(g)
+  ok(mv && mv.r === 0 && mv.c === 0 && mv.r2 === 1 && mv.c2 === 0, '彩虹猫配炸弹（连环引爆）优先于配零散普通块')
+}
+
+{
+  // 18h. 死局棋盘：无可行分支 → null（与 findPossibleMove 口径一致）
+  const g = buildGrid2(
+    [
+      [0, 1, 2],
+      [3, 4, 5],
+      [0, 1, 2]
+    ],
+    3,
+    3
+  )
+  ok(findBestMove(g) === null, '死局棋盘：无分支可提示 → null')
+  ok(findPossibleMove(g) === null, '死局棋盘：与 findPossibleMove 存在性判定一致')
 }
 
 console.log(`\n全部 ${passed} 项引擎测试通过 ✅`)

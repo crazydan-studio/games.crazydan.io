@@ -6,6 +6,7 @@ import {
   createBoard,
   findMatchGroups,
   findPossibleMove,
+  findBestMove,
   swapCells,
   collapseColumns,
   reshuffleTypes,
@@ -144,13 +145,16 @@ export function createGame(mode) {
   // ---------- 提示 ----------
   // 手动提示（showHint）始终可用，不受设置影响；
   // 设置 hint 仅控制「闲置 5 秒自动亮起」的自动提示
+  // 两条路径均采取最高分支优先策略（findBestMove）：枚举全部可行交换，
+  // 高亮即时战果估值最高的一步（双彩虹 > 彩虹配同款大部队/炸弹 > 炸弹对 >
+  // 5 连/L/T > 4 连 > 3 连，估值口径与实际计分一致，见 engine.js）
   function resetIdleTimer() {
     clearTimeout(idleTimer)
     hint.value = null
     if (state.value !== 'idle' || !settings.hint) return
     idleTimer = setTimeout(() => {
       if (state.value !== 'idle' || uiState.overlay) return
-      const mv = findPossibleMove(grid)
+      const mv = findBestMove(grid)
       if (mv) hint.value = { a: grid[mv.r][mv.c].id, b: grid[mv.r2][mv.c2].id }
     }, 5000)
   }
@@ -161,7 +165,7 @@ export function createGame(mode) {
 
   function showHint() {
     if (state.value !== 'idle') return
-    const mv = findPossibleMove(grid)
+    const mv = findBestMove(grid)
     if (mv) {
       hint.value = { a: grid[mv.r][mv.c].id, b: grid[mv.r2][mv.c2].id }
       setTimeout(() => {

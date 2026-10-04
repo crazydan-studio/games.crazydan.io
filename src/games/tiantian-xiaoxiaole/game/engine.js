@@ -302,8 +302,9 @@ export function swapCells(grid, r1, c1, r2, c2) {
   }
 }
 
-// 是否存在可行的一步交换（返回第一个找到的可行动，可用于提示）
+// 是否存在可行的一步交换（返回第一个找到的可行动）
 // 优先级：彩虹猫配任意邻居 → 炸弹对炸弹 → 普通三连
+// 仅用于存在性判定（开局生成 / 死局检测 / 洗牌保护）；提示请用 findBestMove（最高分支优先）
 export function findPossibleMove(grid) {
   const { rows, cols } = dims(grid)
   const fourDirs = [
@@ -457,4 +458,135 @@ export function bombBonusOf(cleared) {
 export function rainbowBonusOf(cleared, isSuper = false) {
   const n = Number.isFinite(cleared) && cleared > 0 ? Math.floor(cleared) : 0
   return (isSuper ? SUPER_RAINBOW_BONUS_PER_CELL : RAINBOW_BONUS_PER_CELL) * n
+}
+
+// ---------- 提示：最高分支优先 ----------
+// 把每个可行交换视作一条「分支」，用与实际计分同口径的静态估值为每条分支打分，
+// 提示估值最高的一条；随机补充方块带来的后续连锁不可预估，不计入估值。
+// 分支含金量（由高到低）：双彩虹 > 彩虹配同款大部队/炸弹 > 炸弹对 >
+// 5 连/L/T > 4 连 > 3 连；同估值取扫描顺序靠前的分支（结果确定，便于测试）。
+const BOMB_BLAST_AVG = 4 // 估算「被波及引爆的炸弹」的平均战果格数（3×3 扣除已在消除集的格子）
+
+// 被波及的彩虹猫随机清除一种类型：按剩余各类型的平均格数估算期望战果
+function averageTypeCount(grid, removedKeys) {
+  const { rows, cols } = dims(grid)
+  const counts = new Map()
+  let total = 0
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const t = grid[r][c]
+      if (!t || t.type < 0 || removedKeys.has(cellKey(r, c, cols))) continue
+      counts.set(t.type, (counts.get(t.type) || 0) + 1)
+      total++
+    }
+  }
+  return counts.size ? total / counts.size : 0
+}
+
+// 单次交换的即时战果估值（只读棋盘，读完即还原，不落子）：
+//   · 彩虹猫分支：双彩虹按「全场格数 × 双彩虹单价 + 场上炸弹威力」；
+//     彩虹配普通块/炸弹按「该类型在场格数（含彩虹猫自身）× 彩虹单价 + 同款炸弹连环」
+//   · 炸弹对炸弹：两枚 3×3 的战果
+//   · 普通交换：模拟落子后的匹配簇基础分 + 被波及炸弹/彩虹的威力
+//     （本波新诞生的特殊块受保护，不计入）
+function estimateSwapValue(grid, r1, c1, r2, c2) {
+  const { rows, cols } = dims(grid)
+  const a = grid[r1][c1]
+  const b = grid[r2][c2]
+  if (!a || !b) return 0
+
+  // —— 彩虹猫分支 ——
+  if (a.kind === 'rainbow' || b.kind === 'rainbow') {
+    if (a.kind === 'rainbow' && b.kind === 'rainbow') {
+      // 双彩虹：清空全场，场上炸弹全部随之引爆
+      let tiles = 0
+      let bombs = 0
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (!grid[r][c]) continue
+          tiles++
+          if (grid[r][c].kind === 'bomb') bombs++
+        }
+      }
+      return rainbowBonusOf(tiles, true) + bombs * bombBonusOf(BOMB_BLAST_AVG)
+    }
+    // 彩虹猫配普通块/炸弹：清除全场该类型（同款炸弹会连环引爆）
+    const targetType = (a.kind === 'rainbow' ? b : a).type
+    let cnt = 0
+    let bombs = 0
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const t = grid[r][c]
+        if (!t || t.type !== targetType || t.kind === 'rainbow') continue
+        cnt++
+        if (t.kind === 'bomb') bombs++
+      }
+    }
+    return rainbowBonusOf(cnt + 1) + bombs * bombBonusOf(BOMB_BLAST_AVG)
+  }
+
+  // —— 炸弹对炸弹：双双引爆 ——
+  if (a.kind === 'bomb' && b.kind === 'bomb') {
+    return 2 * bombBonusOf(BOMB_BLAST_AVG)
+  }
+
+  // —— 普通交换：模拟落子找匹配簇，读完即还原 ——
+  swapCells(grid, r1, c1, r2, c2)
+  let value = 0
+  const groups = findMatchGroups(grid)
+  if (groups.length) {
+    const baseCells = []
+    const skipIds = new Set()
+    for (const g of groups) {
+      value += g.length * 10 + (g.length - 3) * 20
+      if (g.special) {
+        const t = grid[g.spawn.r][g.spawn.c]
+        if (t) skipIds.add(t.id)
+        for (const cell of g.cells) {
+          if (cell.r === g.spawn.r && cell.c === g.spawn.c) continue
+          baseCells.push(cell)
+        }
+      } else {
+        baseCells.push(...g.cells)
+      }
+    }
+    // 被波及的炸弹/彩虹猫威力（同口径三档奖励分估算）
+    const removedKeys = new Set(baseCells.map((x) => cellKey(x.r, x.c, cols)))
+    const avgType = averageTypeCount(grid, removedKeys)
+    for (const cell of baseCells) {
+      const t = grid[cell.r][cell.c]
+      if (!t || skipIds.has(t.id)) continue
+      if (t.kind === 'bomb') value += bombBonusOf(BOMB_BLAST_AVG)
+      else if (t.kind === 'rainbow') value += rainbowBonusOf(avgType)
+    }
+  }
+  swapCells(grid, r1, c1, r2, c2)
+  return value
+}
+
+// 最高分支优先：枚举全部相邻交换，返回即时战果估值最高的一条（供提示使用）；
+// 无可行步返回 null。估值口径与实际计分一致（见 estimateSwapValue），
+// 因此「最高分支」= 即时战果期望最大的一步。
+export function findBestMove(grid) {
+  const { rows, cols } = dims(grid)
+  let best = null
+  let bestValue = 0
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      for (const [dr, dc] of [
+        [0, 1],
+        [1, 0]
+      ]) {
+        const r2 = r + dr
+        const c2 = c + dc
+        if (r2 >= rows || c2 >= cols) continue
+        const v = estimateSwapValue(grid, r, c, r2, c2)
+        if (v > bestValue) {
+          bestValue = v
+          best = { r, c, r2, c2 }
+        }
+      }
+    }
+  }
+  return best
 }

@@ -2,7 +2,7 @@
 // ============ 游戏主屏：HUD + 棋盘 + 结算弹窗 ============
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { createGame } from '../game/useGame'
-import { findPossibleMove } from '../game/engine'
+import { findBestMove } from '../game/engine'
 import GameBoard from './GameBoard.vue'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
@@ -37,7 +37,8 @@ onBeforeUnmount(() => {
 if (import.meta.env.DEV) {
   window.__TT_TEST__ = {
     game,
-    findMove: () => findPossibleMove(game.grid),
+    // 最高分支优先的可行动（与「提示」同源策略），供 E2E 验证提示指向
+    findMove: () => findBestMove(game.grid),
     // 强制设置格子类型（"r,c" → type），供 E2E 构造 4 连/5 连场景
     setTypes(map) {
       for (const [key, type] of Object.entries(map)) {
