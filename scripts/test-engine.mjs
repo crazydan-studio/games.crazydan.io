@@ -1,5 +1,6 @@
 // ============ 引擎单元测试（Node 直接运行，无浏览器依赖） ============
-// 覆盖：特殊块判定（4连炸弹/5连彩虹/L形交叉）、连锁展开、可行步、洗牌保护、连消奖励分
+// 覆盖：特殊块判定（4连炸弹/5连彩虹/L形交叉）、连锁展开、可行步、洗牌保护、
+// 连消奖励分、特殊块三档奖励分
 import assert from 'node:assert'
 import {
   BOARD_SIZE,
@@ -12,7 +13,13 @@ import {
   swapCells,
   comboBonusOf,
   COMBO_BONUS_STEP,
-  COMBO_BONUS_RATE
+  COMBO_BONUS_RATE,
+  bombBonusOf,
+  rainbowBonusOf,
+  BOMB_BONUS_BASE,
+  BOMB_BONUS_PER_CELL,
+  RAINBOW_BONUS_PER_CELL,
+  SUPER_RAINBOW_BONUS_PER_CELL
 } from '../src/games/tiantian-xiaoxiaole/game/engine.js'
 
 let passed = 0
@@ -392,6 +399,31 @@ function buildGrid2(types, rows, cols) {
   )
   ok(comboBonusOf(-50, 3) === 0 && comboBonusOf(NaN, 3) === 0, '连消奖励：非法基础分（负数/NaN）→ 0')
   ok(comboBonusOf(60, 2.9) === comboBonusOf(60, 2), '连消奖励：非整数波次向下取整（2.9 → 2 波档）')
+}
+
+// ---------- 17. 特殊块奖励分三档（炸弹 < 彩虹 < 双彩虹） ----------
+{
+  ok(bombBonusOf(0) === BOMB_BONUS_BASE, '炸弹奖励：无波及格 → 固定登场奖励 60')
+  ok(bombBonusOf(8) === BOMB_BONUS_BASE + BOMB_BONUS_PER_CELL * 8, '炸弹奖励：波及 8 格 → 60 + 15×8 = 180')
+  const bombCurve = [0, 2, 4, 6, 8].map((n) => bombBonusOf(n))
+  ok(bombCurve.every((v, i) => i === 0 || v > bombCurve[i - 1]), '炸弹奖励：波及格数越多 → 奖励单调递增')
+  ok(rainbowBonusOf(10) === RAINBOW_BONUS_PER_CELL * 10, '彩虹奖励：清除 10 格 → 40×10 = 400')
+  ok(rainbowBonusOf(10, true) === SUPER_RAINBOW_BONUS_PER_CELL * 10, '双彩虹奖励：清除 10 格 → 50×10 = 500')
+  ok(
+    BOMB_BONUS_PER_CELL < RAINBOW_BONUS_PER_CELL && RAINBOW_BONUS_PER_CELL < SUPER_RAINBOW_BONUS_PER_CELL,
+    '奖励分档：炸弹(15/格) < 彩虹(40/格) < 双彩虹(50/格)，威力与稀有度越高回报越高'
+  )
+  ok(
+    bombBonusOf(8) < rainbowBonusOf(8) && rainbowBonusOf(8) < rainbowBonusOf(8, true),
+    '同等清除规模：炸弹 < 彩虹 < 双彩虹，奖励程度严格递增'
+  )
+  ok(bombBonusOf(-5) === BOMB_BONUS_BASE && bombBonusOf(NaN) === BOMB_BONUS_BASE, '炸弹奖励：非法波及数 → 只保留登场奖励')
+  ok(rainbowBonusOf(-5) === 0 && rainbowBonusOf(NaN) === 0 && rainbowBonusOf(0) === 0, '彩虹奖励：无清除/非法清除数 → 0')
+  ok(rainbowBonusOf(7.9) === RAINBOW_BONUS_PER_CELL * 7, '彩虹奖励：非整数清除数向下取整')
+  ok(bombBonusOf(4.9) === BOMB_BONUS_BASE + BOMB_BONUS_PER_CELL * 4, '炸弹奖励：非整数波及数向下取整')
+  // 引擎常量与 useGame 计分口径一致性：炸弹 60+15n、彩虹 40n、双彩虹 50n
+  ok(BOMB_BONUS_BASE === 60 && BOMB_BONUS_PER_CELL === 15, '炸弹奖励常量：登场 60 + 15/格')
+  ok(RAINBOW_BONUS_PER_CELL === 40 && SUPER_RAINBOW_BONUS_PER_CELL === 50, '彩虹奖励常量：普通 40/格、双彩虹 50/格')
 }
 
 console.log(`\n全部 ${passed} 项引擎测试通过 ✅`)

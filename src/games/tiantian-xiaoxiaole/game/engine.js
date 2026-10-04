@@ -14,6 +14,8 @@
 // 计分规则（纯函数，供状态机 useGame.js 调用）：
 //   · 连消（连锁）从第 2 波起，每波在「基础分 × 波次」乘数之外额外给予奖励分，
 //     波数越多、本波基础分越高，奖励分越高（见文件末尾 comboBonusOf）
+//   · 特殊块按稀有度与威力分三档奖励：炸弹猫（60 + 15×波及格）< 彩虹猫（40×清除格）
+//     < 双彩虹（50×清除格），见文件末尾 bombBonusOf / rainbowBonusOf
 
 export const BOARD_SIZE = 8 // 默认棋盘尺寸（引擎函数自身从 grid 读取行列数）
 export const ELEMENT_COUNT = 6
@@ -427,4 +429,32 @@ export function comboBonusOf(rawBase, combo) {
   if (!Number.isFinite(combo) || combo < 2) return 0
   const waves = Math.floor(combo) - 1 // 连消波次（第 2 波起算 1）
   return COMBO_BONUS_STEP * waves + Math.round(rawBase * COMBO_BONUS_RATE * waves)
+}
+
+// ---------- 特殊块奖励分（炸弹 / 彩虹分档） ----------
+// 炸弹与彩虹猫按稀有度与威力分三档给予不同程度的奖励分（不含连消波次乘数 ×combo，
+// 由调用方叠加）：
+//   · 炸弹猫（4 连诞生，3×3 局部爆破）：固定登场奖励 + 战果分随波及格数递增
+//     奖励 = BOMB_BONUS_BASE + BOMB_BONUS_PER_CELL × 引爆波及格数
+//   · 彩虹猫（≥5 连诞生，全场级清除）：稀有度更高，每清除 1 格的单价高于炸弹
+//     奖励 = RAINBOW_BONUS_PER_CELL × 清除格数
+//   · 双彩虹（两枚彩虹猫交换，清空全场）：爆发上限档
+//     奖励 = SUPER_RAINBOW_BONUS_PER_CELL × 清除格数
+// 三档单位奖励严格递增：炸弹 15/格 < 彩虹 40/格 < 双彩虹 50/格，
+// 威力与稀有度越高，回报越高。
+export const BOMB_BONUS_BASE = 60 // 炸弹引爆的固定登场奖励
+export const BOMB_BONUS_PER_CELL = 15 // 炸弹每波及 1 格追加的战果奖励
+export const RAINBOW_BONUS_PER_CELL = 40 // 彩虹猫每清除 1 格的奖励
+export const SUPER_RAINBOW_BONUS_PER_CELL = 50 // 双彩虹每清除 1 格的奖励
+
+// 炸弹猫引爆一次的奖励分（cleared = 3×3 内新波及的格数，可为 0）
+export function bombBonusOf(cleared) {
+  const n = Number.isFinite(cleared) && cleared > 0 ? Math.floor(cleared) : 0
+  return BOMB_BONUS_BASE + BOMB_BONUS_PER_CELL * n
+}
+
+// 彩虹猫清除一次的奖励分（cleared = 清除格数；isSuper = 双彩虹清空全场）
+export function rainbowBonusOf(cleared, isSuper = false) {
+  const n = Number.isFinite(cleared) && cleared > 0 ? Math.floor(cleared) : 0
+  return (isSuper ? SUPER_RAINBOW_BONUS_PER_CELL : RAINBOW_BONUS_PER_CELL) * n
 }

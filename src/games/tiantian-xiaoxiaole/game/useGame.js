@@ -1,5 +1,5 @@
 // ============ 游戏状态机（Vue 组合式函数） ============
-// 负责动画时序编排、计分/连击与连消奖励、关卡进度、限时模式与提示
+// 负责动画时序编排、计分/连击与连消奖励、特殊块三档奖励分、关卡进度、限时模式与提示
 // 以及特殊块（炸弹猫 / 彩虹猫）的诞生、激活与连锁
 import { reactive, ref, computed } from 'vue'
 import {
@@ -10,7 +10,9 @@ import {
   collapseColumns,
   reshuffleTypes,
   expandSpecials,
-  comboBonusOf
+  comboBonusOf,
+  bombBonusOf,
+  rainbowBonusOf
 } from './engine'
 import { playSound } from '../utils/sound'
 import { toast } from '../utils/toast'
@@ -227,10 +229,12 @@ export function createGame(mode) {
     return bonus
   }
 
-  // 特殊块连锁的计分与飘字（炸弹 +120 / 被波及的彩虹猫 +40×格数）
+  // 特殊块连锁的计分与飘字：炸弹/彩虹按三档奖励分计价（见 engine.js），再叠加连消波次乘数
+  //   · 炸弹猫：登场奖励 60 + 15×波及格数（引爆战果越多奖励越高）
+  //   · 被波及的彩虹猫：40×清除格数（稀有度更高，单价高于炸弹）
   function applySpecialScore(triggers, combo) {
     for (const tr of triggers) {
-      const pts = tr.kind === 'bomb' ? 120 * combo : 40 * (tr.cleared || 0) * combo
+      const pts = (tr.kind === 'bomb' ? bombBonusOf(tr.cleared) : rainbowBonusOf(tr.cleared)) * combo
       if (pts <= 0) continue
       score.value += pts
       const label = tr.kind === 'bomb' ? '轰！' : '彩虹猫！'
@@ -398,7 +402,8 @@ export function createGame(mode) {
     }
 
     const { cells, triggers } = expandSpecials(grid, initial, new Set(), silentIds)
-    const pts = (isSuper ? 30 : 25) * cells.length
+    // 主动激活的彩虹猫同样按档计价：普通 40/格，双彩虹（全场清空）50/格
+    const pts = rainbowBonusOf(cells.length, isSuper)
     score.value += pts
     applySpecialScore(triggers, 1)
     if (rp) pushPopup(rp.r, rp.c, isSuper ? `超级彩虹猫！+${pts}` : `彩虹猫！+${pts}`)
