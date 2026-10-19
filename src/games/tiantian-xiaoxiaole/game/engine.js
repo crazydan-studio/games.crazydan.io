@@ -18,6 +18,9 @@
 //     < 双彩虹（50×清除格），见文件末尾 bombBonusOf / rainbowBonusOf
 //   · 从第 10 关起每通过一关，下一关初始步数获得通关奖励（+2/关、封顶 +10），
 //     见文件末尾 movesBonusOf
+//   · 从第 10 关起每关埋藏隐藏彩蛋（数量逐关递增至封顶 6 枚、分值逐关走高且单枚
+//     远大于普通匹配），消除波及彩蛋格即触发加分，见文件末尾 eggCountOf /
+//     eggValueOf / planEasterEggs
 
 export const BOARD_SIZE = 8 // 默认棋盘尺寸（引擎函数自身从 grid 读取行列数）
 export const ELEMENT_COUNT = 6
@@ -478,6 +481,73 @@ export function movesBonusOf(level) {
   const n = Number.isFinite(level) && level > 0 ? Math.floor(level) : 1
   if (n < MOVES_BONUS_FROM_LEVEL) return 0
   return Math.min(MOVES_BONUS_MAX, MOVES_BONUS_PER_LEVEL * (n - (MOVES_BONUS_FROM_LEVEL - 1)))
+}
+
+// ---------- 隐藏彩蛋（第 10 关起） ----------
+// 关卡目标分随关数线性上涨（每关 +600），第 10 关起对休闲玩家构成信心坎。
+// 在通关奖励步数之外再加一层「隐藏彩蛋」惊喜：开局把若干彩蛋埋在随机格子上，
+// 玩家看不见也瞄不准，任何消除（含连消波次/炸弹波及/彩虹清场）扫到彩蛋格
+// 即当场开奖加分——纯粹的意外之喜，而非可控的技巧收益，因此：
+//   · 数量：从第 10 关起每升一关 +1 枚（第 10 关 2 枚、11 关 3 枚 …封顶 6 枚），
+//     每通过一关，下一关藏的彩蛋数量都不一样（eggCountOf）
+//   · 分值：单枚 = 基础 450 + 50×（关卡 − 10）+ 60×蛋序，封顶 1200；
+//     关数越高、同关内蛋序越靠后，分值越大；单枚就是普通三连（30 分）的
+//     15~40 倍，属「较大分值」（eggValueOf）
+//   · 彩蛋分为固定值，不乘连消波次倍数：惊喜奖励不随连锁膨胀，
+//     上限可控（每关彩蛋总分封顶 7200，且始终低于关卡目标分）
+// 埋放见 planEasterEggs（纯函数，随机源可注入，便于确定性测试）。
+export const EGG_FROM_LEVEL = 10 // 从第 10 关起埋藏隐藏彩蛋
+export const EGG_COUNT_BASE = 2 // 第 10 关的基础彩蛋数
+export const EGG_COUNT_MAX = 6 // 彩蛋数量封顶（第 14 关起）
+export const EGG_VALUE_BASE = 450 // 第 10 关首枚彩蛋的基础分值
+export const EGG_VALUE_PER_LEVEL = 50 // 每升一关，单枚彩蛋分值的增量
+export const EGG_VALUE_STEP = 60 // 同关内每靠后一枚彩蛋的分值增量（蛋序阶梯）
+export const EGG_VALUE_MAX = 1200 // 单枚彩蛋分值封顶
+
+// 第 level 关埋藏的隐藏彩蛋数量
+export function eggCountOf(level) {
+  const n = Number.isFinite(level) && level > 0 ? Math.floor(level) : 1
+  if (n < EGG_FROM_LEVEL) return 0
+  return Math.min(EGG_COUNT_MAX, EGG_COUNT_BASE + (n - EGG_FROM_LEVEL))
+}
+
+// 第 level 关第 idx 枚（0 起）彩蛋的分值：关数与蛋序双阶梯递增，封顶 1200
+export function eggValueOf(level, idx) {
+  const n = Number.isFinite(level) && level > 0 ? Math.floor(level) : 1
+  if (n < EGG_FROM_LEVEL) return 0
+  const i = Number.isFinite(idx) && idx > 0 ? Math.floor(idx) : 0
+  return Math.min(
+    EGG_VALUE_MAX,
+    EGG_VALUE_BASE + EGG_VALUE_PER_LEVEL * (n - EGG_FROM_LEVEL) + EGG_VALUE_STEP * i
+  )
+}
+
+// 为第 level 关规划彩蛋埋放：从 rows×cols 个格子里不重复地随机抽 count 枚，
+// 第 i 枚领第 i 档分值（蛋序随机分布到格子上）。rand 可注入（默认 Math.random），
+// 传入确定性的伪随机源即可复现埋放，供单元测试。返回 [{ r, c, value }]。
+export function planEasterEggs(level, rows, cols, rand = Math.random) {
+  const count = eggCountOf(level)
+  const R = Number.isFinite(rows) && rows > 0 ? Math.floor(rows) : 0
+  const C = Number.isFinite(cols) && cols > 0 ? Math.floor(cols) : 0
+  if (count <= 0 || R <= 0 || C <= 0) return []
+  const total = Math.min(count, R * C) // 极小棋盘保护：最多一格一蛋
+
+  const pool = []
+  for (let r = 0; r < R; r++) {
+    for (let c = 0; c < C; c++) pool.push({ r, c })
+  }
+  // 部分 Fisher-Yates：只洗出前 total 个，每枚恰好调用一次随机源
+  const picked = []
+  for (let i = 0; i < total; i++) {
+    let j = i + Math.floor(rand() * (pool.length - i))
+    if (j < i) j = i // 脏随机源保护
+    if (j >= pool.length) j = pool.length - 1
+    const t = pool[i]
+    pool[i] = pool[j]
+    pool[j] = t
+    picked.push({ ...pool[i], value: eggValueOf(level, i) })
+  }
+  return picked
 }
 
 // ---------- 提示：最高分支优先 ----------

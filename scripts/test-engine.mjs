@@ -1,6 +1,6 @@
 // ============ 引擎单元测试（Node 直接运行，无浏览器依赖） ============
 // 覆盖：特殊块判定（4连炸弹/5连彩虹/L形交叉）、连锁展开、可行步、洗牌保护、
-// 连消奖励分、特殊块三档奖励分、通关奖励步数
+// 连消奖励分、特殊块三档奖励分、通关奖励步数、隐藏彩蛋
 import assert from 'node:assert'
 import {
   BOARD_SIZE,
@@ -24,7 +24,17 @@ import {
   movesBonusOf,
   MOVES_BONUS_FROM_LEVEL,
   MOVES_BONUS_PER_LEVEL,
-  MOVES_BONUS_MAX
+  MOVES_BONUS_MAX,
+  eggCountOf,
+  eggValueOf,
+  planEasterEggs,
+  EGG_FROM_LEVEL,
+  EGG_COUNT_BASE,
+  EGG_COUNT_MAX,
+  EGG_VALUE_BASE,
+  EGG_VALUE_PER_LEVEL,
+  EGG_VALUE_STEP,
+  EGG_VALUE_MAX
 } from '../src/games/tiantian-xiaoxiaole/game/engine.js'
 
 let passed = 0
@@ -564,6 +574,97 @@ function buildBoardA() {
     MOVES_BONUS_FROM_LEVEL === 10 && MOVES_BONUS_PER_LEVEL === 2 && MOVES_BONUS_MAX === 10,
     '奖励步数常量：第 10 关起 +2/关、封顶 +10'
   )
+}
+
+// ---------- 20. 隐藏彩蛋（第 10 关起：数量逐关递增、分值阶梯走高） ----------
+{
+  // 20a. 数量阶梯：第 1~9 关不埋蛋，第 10 关起每升一关 +1 枚，封顶 6 枚
+  ok(eggCountOf(1) === 0 && eggCountOf(5) === 0 && eggCountOf(9) === 0, '彩蛋数量：第 1~9 关不埋蛋')
+  ok(
+    eggCountOf(10) === 2 && eggCountOf(11) === 3 && eggCountOf(12) === 4 && eggCountOf(13) === 5,
+    '彩蛋数量：第 10~13 关逐关 +1（2/3/4/5 枚，每通过一关数量不同）'
+  )
+  ok(eggCountOf(14) === 6 && eggCountOf(15) === 6, '彩蛋数量：第 14 关起封顶 6 枚')
+  ok(eggCountOf(100) === 6 && eggCountOf(9999) === 6, '彩蛋数量：高关卡仍封顶 6 枚（不无限增长）')
+  let eggMono = true
+  for (let lv = 1; lv < 60; lv++) {
+    if (eggCountOf(lv + 1) < eggCountOf(lv)) eggMono = false
+  }
+  ok(eggMono, '彩蛋数量：随关卡单调不减')
+  ok(eggCountOf(NaN) === 0 && eggCountOf(-3) === 0 && eggCountOf(0) === 0, '彩蛋数量：非法关卡 → 0')
+  ok(eggCountOf(9.9) === 0 && eggCountOf(10.9) === 2, '彩蛋数量：非整数关卡向下取整后计价')
+
+  // 20b. 分值阶梯：关数与蛋序双递增，单枚封顶 1200
+  ok(eggValueOf(10, 0) === 450 && eggValueOf(10, 1) === 510, '彩蛋分值：第 10 关两档 450 / 510')
+  ok(eggValueOf(11, 0) === 500 && eggValueOf(11, 2) === 620, '彩蛋分值：第 11 关三档 500 / 560 / 620')
+  ok(
+    eggValueOf(14, 5) === 450 + 50 * 4 + 60 * 5,
+    '彩蛋分值：公式 = 450 + 50×(关−10) + 60×蛋序（第 14 关第 6 枚 = 950）'
+  )
+  const byLevel = [10, 11, 12, 13].map((lv) => eggValueOf(lv, 0))
+  ok(byLevel.every((v, i) => i === 0 || v > byLevel[i - 1]), '彩蛋分值：同蛋序，关数越高分值越大')
+  const byIdx = [0, 1, 2, 3, 4, 5].map((i) => eggValueOf(12, i))
+  ok(byIdx.every((v, i) => i === 0 || v > byIdx[i - 1]), '彩蛋分值：同关卡，蛋序越靠后分值越大')
+  ok(eggValueOf(50, 5) === 1200 && eggValueOf(999, 0) === 1200, '彩蛋分值：单枚封顶 1200')
+  ok(eggValueOf(9, 3) === 0 && eggValueOf(NaN, 0) === 0 && eggValueOf(-3, 0) === 0, '彩蛋分值：第 10 关前/非法关卡 → 0')
+  ok(eggValueOf(10, -2) === 450 && eggValueOf(10, NaN) === 450, '彩蛋分值：非法蛋序归一为首档')
+  ok(
+    EGG_FROM_LEVEL === 10 &&
+      EGG_COUNT_BASE === 2 &&
+      EGG_COUNT_MAX === 6 &&
+      EGG_VALUE_BASE === 450 &&
+      EGG_VALUE_PER_LEVEL === 50 &&
+      EGG_VALUE_STEP === 60 &&
+      EGG_VALUE_MAX === 1200,
+    '彩蛋常量：第 10 关起、2 枚起步封顶 6 枚，450 起步 +50/关 +60/蛋序封顶 1200'
+  )
+
+  // 20c. 分值体量：「较大分值」——单枚远大于普通三连（30 分），且彩蛋总分始终低于目标分
+  ok(eggValueOf(10, 0) >= 15 * 30, '彩蛋分值：单枚 ≥ 15 倍普通三连（450 vs 30）')
+  const targetOf = (lv) => 800 + (lv - 1) * 600
+  let totalBelowTarget = true
+  for (const lv of [10, 11, 12, 13, 14, 15, 20, 30, 50]) {
+    let sum = 0
+    for (let i = 0; i < eggCountOf(lv); i++) sum += eggValueOf(lv, i)
+    if (sum >= targetOf(lv)) totalBelowTarget = false
+  }
+  ok(totalBelowTarget, '彩蛋分值：每关彩蛋总分始终低于关卡目标分（惊喜不至于直接送通关）')
+
+  // 20d. 埋放规划：不重复格子、蛋序阶梯领分、可注入随机源确定性复现
+  ok(planEasterEggs(1, 8, 8).length === 0, '彩蛋埋放：第 1 关 → 空（不埋蛋）')
+  ok(
+    planEasterEggs(10, 0, 8).length === 0 && planEasterEggs(10, 8, -1).length === 0,
+    '彩蛋埋放：非法棋盘尺寸 → 空'
+  )
+  const seq = [0.73, 0.11, 0.42, 0.95, 0.28, 0.66, 0.5, 0.8, 0.3, 0.9]
+  const planA = planEasterEggs(12, 8, 8, () => seq.shift())
+  ok(planA.length === 4, '彩蛋埋放：第 12 关 8×8 → 恰 4 枚')
+  const keys = planA.map((e) => e.r * 8 + e.c)
+  ok(new Set(keys).size === 4, '彩蛋埋放：格子不重复（一格至多一蛋）')
+  ok(planA.every((e) => e.r >= 0 && e.r < 8 && e.c >= 0 && e.c < 8), '彩蛋埋放：坐标都在棋盘内')
+  ok(
+    planA.every((e, i) => e.value === eggValueOf(12, i)),
+    '彩蛋埋放：第 i 枚领第 i 档分值（蛋序阶梯）'
+  )
+  const seq2 = [0.73, 0.11, 0.42, 0.95]
+  const planB = planEasterEggs(12, 8, 8, () => seq2.shift())
+  ok(
+    JSON.stringify(planA) === JSON.stringify(planB),
+    '彩蛋埋放：同随机源 → 同埋放结果（确定性可复现）'
+  )
+  // 零随机源：恒 0 → 不洗牌，按行主序取前 count 格
+  const planZ = planEasterEggs(10, 8, 8, () => 0)
+  ok(
+    planZ.length === 2 &&
+      planZ[0].r === 0 && planZ[0].c === 0 && planZ[1].r === 0 && planZ[1].c === 1,
+    '彩蛋埋放：零随机源 → 按行主序取前 N 格（确定性边界）'
+  )
+  // 极小棋盘保护：数量多于格子时一格一蛋全铺
+  const tiny = planEasterEggs(14, 2, 2, () => 0.5)
+  ok(tiny.length === 4 && new Set(tiny.map((e) => e.r * 2 + e.c)).size === 4, '彩蛋埋放：2×2 棋盘 → 至多铺 4 格不溢出')
+  // 脏随机源（越界/负值）不抛错不越界
+  const dirty = planEasterEggs(13, 8, 8, () => 1.7)
+  ok(dirty.length === 5 && dirty.every((e) => e.r >= 0 && e.r < 8 && e.c >= 0 && e.c < 8), '彩蛋埋放：脏随机源（越界值）钳制保护不炸')
 }
 
 console.log(`\n全部 ${passed} 项引擎测试通过 ✅`)

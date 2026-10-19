@@ -56,6 +56,11 @@ if (import.meta.env.DEV) {
       return game.tiles
         .filter((t) => t.kind !== 'normal')
         .map((t) => ({ id: t.id, kind: t.kind, type: t.type, x: t.x, y: t.y }))
+    },
+    // 隐藏彩蛋状态快照：planned 埋蛋数 / found 已发现 / score 彩蛋分 /
+    // hidden 未发现彩蛋的坐标与分值（供 E2E 确定性构造「消除恰好扫到彩蛋格」场景）
+    eggs() {
+      return game.eggList()
     }
   }
 }

@@ -1,6 +1,7 @@
 // ============ 游戏状态机（Vue 组合式函数） ============
 // 负责动画时序编排、计分/连击与连消奖励、特殊块三档奖励分、通关奖励步数、
-// 关卡进度、限时模式与提示，以及特殊块（炸弹猫 / 彩虹猫）的诞生、激活与连锁
+// 隐藏彩蛋（埋放与触发计分）、关卡进度、限时模式与提示，
+// 以及特殊块（炸弹猫 / 彩虹猫）的诞生、激活与连锁
 import { reactive, ref, computed } from 'vue'
 import {
   createBoard,
@@ -14,7 +15,8 @@ import {
   comboBonusOf,
   bombBonusOf,
   rainbowBonusOf,
-  movesBonusOf
+  movesBonusOf,
+  planEasterEggs
 } from './engine'
 import { playSound } from '../utils/sound'
 import { toast } from '../utils/toast'
@@ -54,6 +56,13 @@ export function createGame(mode) {
   const hint = ref(null) // { a: tileId, b: tileId }
   const popups = reactive([])
   const comboNow = ref(0)
+  // 隐藏彩蛋（仅经典模式；规则见 engine.js）：eggCells 为「格子键 → 分值」的
+  // 本关埋蛋表（格子键 = r × cols + c，与引擎 cellKey 同口径）；eggsPlanned 为
+  // 本关埋蛋总数，eggsFound / eggScore 为已发现枚数与彩蛋分累计（结算展示用）
+  let eggCells = new Map()
+  const eggsPlanned = ref(0)
+  const eggsFound = ref(0)
+  const eggScore = ref(0)
   let popSeq = 0
   let idleTimer = null
   let tickTimer = null
@@ -130,6 +139,18 @@ export function createGame(mode) {
     selectedId.value = null
     hint.value = null
     comboNow.value = 0
+    // 埋隐藏彩蛋：每关开局重新规划（重开本关也一样重埋），仅经典模式；
+    // 限时模式无关卡概念、不埋蛋（规则见 engine.js planEasterEggs）
+    eggCells = new Map()
+    eggsFound.value = 0
+    eggScore.value = 0
+    if (modeRef.value === 'classic') {
+      const plan = planEasterEggs(level.value, ROWS, COLS)
+      for (const e of plan) eggCells.set(e.r * COLS + e.c, e.value)
+      eggsPlanned.value = plan.length
+    } else {
+      eggsPlanned.value = 0
+    }
     state.value = 'idle'
     loadBoard()
     if (modeRef.value === 'time') startTimer()
@@ -252,6 +273,37 @@ export function createGame(mode) {
     return bonus
   }
 
+  // ---------- 隐藏彩蛋触发 ----------
+  // 任何消除路径（普通匹配/连消波次/炸弹波及/彩虹清场）移除的格子里若有彩蛋，
+  // 当场开奖：加固定彩蛋分（不乘连消倍数，规则见 engine.js）、飘字报喜、
+  // 记入本关彩蛋战绩。返回本波开出的彩蛋数。
+  function collectEggs(cells) {
+    if (!eggCells.size) return 0
+    let hit = 0
+    for (const { r, c } of cells) {
+      const k = r * COLS + c
+      const value = eggCells.get(k)
+      if (value == null) continue
+      eggCells.delete(k)
+      hit++
+      eggsFound.value++
+      eggScore.value += value
+      score.value += value
+      pushPopup(r, c, `彩蛋 +${value}！`)
+    }
+    return hit
+  }
+
+  // 本关彩蛋状态快照（DEV/E2E 钩子用）：planned 埋蛋总数 / found 已发现枚数 /
+  // score 彩蛋分累计 / hidden 尚未被扫到的彩蛋（已发现的蛋随格子移除，无法复原位置）
+  function eggList() {
+    const hidden = []
+    for (const [k, value] of eggCells) {
+      hidden.push({ r: Math.floor(k / COLS), c: k % COLS, value })
+    }
+    return { planned: eggsPlanned.value, found: eggsFound.value, score: eggScore.value, hidden }
+  }
+
   // 特殊块连锁的计分与飘字：炸弹/彩虹按三档奖励分计价（见 engine.js），再叠加连消波次乘数
   //   · 炸弹猫：登场奖励 60 + 15×波及格数（引爆战果越多奖励越高）
   //   · 被波及的彩虹猫：40×清除格数（稀有度更高，单价高于炸弹）
@@ -352,6 +404,8 @@ export function createGame(mode) {
       // 连锁展开：命中的炸弹引爆 3×3、被波及的彩虹猫随机清一种类型
       const { cells, triggers } = expandSpecials(grid, baseCells, skipIds)
       applySpecialScore(triggers, combo)
+      // 彩蛋开奖：本波移除的格子里扫到彩蛋格即加分
+      collectEggs(cells)
 
       // 音效
       if (triggers.some((x) => x.kind === 'rainbow')) playSound('rainbow')
@@ -429,6 +483,8 @@ export function createGame(mode) {
     const pts = rainbowBonusOf(cells.length, isSuper)
     score.value += pts
     applySpecialScore(triggers, 1)
+    // 彩蛋开奖：清场路径同样能扫到彩蛋（双彩虹清空全场 = 彩蛋大满贯）
+    collectEggs(cells)
     if (rp) pushPopup(rp.r, rp.c, isSuper ? `超级彩虹猫！+${pts}` : `彩虹猫！+${pts}`)
     playSound(isSuper ? 'super' : 'rainbow')
 
@@ -454,6 +510,8 @@ export function createGame(mode) {
   async function activateBombPair(cells) {
     const { cells: expanded, triggers } = expandSpecials(grid, cells)
     applySpecialScore(triggers, 1)
+    // 彩蛋开奖：炸弹对波及路径同样能扫到彩蛋
+    collectEggs(expanded)
     playSound('bomb')
     for (const cell of expanded) {
       const t = grid[cell.r][cell.c]
@@ -614,6 +672,11 @@ export function createGame(mode) {
     isClassic,
     nextLevelBonus,
     nextLevelMoves,
+    // 隐藏彩蛋（结算展示与测试钩子用）
+    eggsPlanned,
+    eggsFound,
+    eggScore,
+    eggList,
     // 动作
     start,
     restart,
