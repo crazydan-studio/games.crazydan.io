@@ -1,6 +1,6 @@
 // ============ 引擎单元测试（Node 直接运行，无浏览器依赖） ============
 // 覆盖：特殊块判定（4连炸弹/5连彩虹/L形交叉）、连锁展开、可行步、洗牌保护、
-// 连消奖励分、特殊块三档奖励分
+// 连消奖励分、特殊块三档奖励分、通关奖励步数
 import assert from 'node:assert'
 import {
   BOARD_SIZE,
@@ -20,7 +20,11 @@ import {
   BOMB_BONUS_PER_CELL,
   RAINBOW_BONUS_PER_CELL,
   SUPER_RAINBOW_BONUS_PER_CELL,
-  findBestMove
+  findBestMove,
+  movesBonusOf,
+  MOVES_BONUS_FROM_LEVEL,
+  MOVES_BONUS_PER_LEVEL,
+  MOVES_BONUS_MAX
 } from '../src/games/tiantian-xiaoxiaole/game/engine.js'
 
 let passed = 0
@@ -534,6 +538,32 @@ function buildBoardA() {
   )
   ok(findBestMove(g) === null, '死局棋盘：无分支可提示 → null')
   ok(findPossibleMove(g) === null, '死局棋盘：与 findPossibleMove 存在性判定一致')
+}
+
+// ---------- 19. 通关奖励步数（从第 10 关起每升一关递增，封顶 +10） ----------
+{
+  // 19a. 第 9 关及以前不发放（基础步数足够，奖励从第 10 关开始）
+  ok(movesBonusOf(1) === 0 && movesBonusOf(5) === 0 && movesBonusOf(9) === 0, '奖励步数：第 1~9 关不发放')
+  // 19b. 从第 10 关起发放，每升一关递增 +2（每通过一关下一关适当增加）
+  ok(movesBonusOf(10) === 2 && movesBonusOf(11) === 4, '奖励步数：第 10 关 +2、第 11 关 +4（逐关递增）')
+  ok(movesBonusOf(12) === 6 && movesBonusOf(13) === 8, '奖励步数：第 12 关 +6、第 13 关 +8（逐关递增）')
+  // 19c. 封顶 +10：第 14 关起不再增长，保持「适当」
+  ok(movesBonusOf(14) === 10 && movesBonusOf(15) === 10, '奖励步数：第 14 关起封顶 +10')
+  ok(movesBonusOf(100) === 10 && movesBonusOf(9999) === 10, '奖励步数：高关卡仍封顶 +10（不随关数无限增长）')
+  // 19d. 逐关单调不减：任意关卡升一关，奖励不减少（符合「每通过一关均增加」语义）
+  let monotonic = true
+  for (let lv = 1; lv < 60; lv++) {
+    if (movesBonusOf(lv + 1) < movesBonusOf(lv)) monotonic = false
+  }
+  ok(monotonic, '奖励步数：随关卡单调不减')
+  // 19e. 脏输入安全：非数字/非正数归一为第 1 关（无奖励），小数向下取整
+  ok(movesBonusOf(NaN) === 0 && movesBonusOf(-3) === 0 && movesBonusOf(0) === 0, '奖励步数：非法关卡 → 0')
+  ok(movesBonusOf(9.9) === 0 && movesBonusOf(10.9) === 2, '奖励步数：非整数关卡向下取整后计价')
+  // 19f. 引擎常量与规则口径一致：第 10 关起 +2/关、封顶 +10
+  ok(
+    MOVES_BONUS_FROM_LEVEL === 10 && MOVES_BONUS_PER_LEVEL === 2 && MOVES_BONUS_MAX === 10,
+    '奖励步数常量：第 10 关起 +2/关、封顶 +10'
+  )
 }
 
 console.log(`\n全部 ${passed} 项引擎测试通过 ✅`)

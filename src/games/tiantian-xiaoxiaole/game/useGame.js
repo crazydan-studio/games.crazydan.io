@@ -1,6 +1,6 @@
 // ============ 游戏状态机（Vue 组合式函数） ============
-// 负责动画时序编排、计分/连击与连消奖励、特殊块三档奖励分、关卡进度、限时模式与提示
-// 以及特殊块（炸弹猫 / 彩虹猫）的诞生、激活与连锁
+// 负责动画时序编排、计分/连击与连消奖励、特殊块三档奖励分、通关奖励步数、
+// 关卡进度、限时模式与提示，以及特殊块（炸弹猫 / 彩虹猫）的诞生、激活与连锁
 import { reactive, ref, computed } from 'vue'
 import {
   createBoard,
@@ -13,7 +13,8 @@ import {
   expandSpecials,
   comboBonusOf,
   bombBonusOf,
-  rainbowBonusOf
+  rainbowBonusOf,
+  movesBonusOf
 } from './engine'
 import { playSound } from '../utils/sound'
 import { toast } from '../utils/toast'
@@ -25,7 +26,7 @@ const SWAP_MS = 200 // 交换动画
 const POP_MS = 300 // 消除动画
 const FALL_MS = 300 // 下落动画
 const INTRO_MS = 420 // 开局落场动画
-const MOVES_PER_LEVEL = 25
+const MOVES_PER_LEVEL = 25 // 每关基础步数（第 10 关起叠加通关奖励步数，见 movesFor/movesBonusOf）
 const TIME_LIMIT = 60
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -40,10 +41,12 @@ export function createGame(mode) {
   )
   const tiles = reactive([]) // 渲染用扁平列表，元素与 grid 中共用同一对象
   const score = ref(0)
-  const moves = ref(MOVES_PER_LEVEL)
   // 经典闯关：从 localStorage 记录的关卡继续（刷新不回第 1 关）；
   // 限时模式无关卡概念，恒为 1
   const level = ref(mode === 'classic' ? loadLevel() : 1)
+  // 初始剩余步数：基础 25 + 通关奖励步数（从第 10 关起每升一关递增，封顶 +10，
+  // 规则见 engine.js movesBonusOf；限时模式无关卡概念、不发奖励）
+  const moves = ref(MOVES_PER_LEVEL + (mode === 'classic' ? movesBonusOf(level.value) : 0))
   const timeLeft = ref(TIME_LIMIT)
   const best = ref(Number(localStorage.getItem('ttxsl-best') || 0))
   const state = ref('idle') // idle | busy | clear | over
@@ -109,10 +112,16 @@ export function createGame(mode) {
     }, 1000)
   }
 
+  // 进入第 lv 关的初始剩余步数：基础步数 + 通关奖励步数（仅经典模式）。
+  // 重开本关、通关进入下一关、刷新后续关均经此口径，奖励不丢失也不重复叠加
+  function movesFor(lv) {
+    return MOVES_PER_LEVEL + (modeRef.value === 'classic' ? movesBonusOf(lv) : 0)
+  }
+
   function resetRound({ keepLevel = true } = {}) {
     clearAllTimers()
     score.value = 0
-    moves.value = MOVES_PER_LEVEL
+    moves.value = movesFor(level.value)
     timeLeft.value = TIME_LIMIT
     selectedId.value = null
     hint.value = null

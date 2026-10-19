@@ -16,6 +16,8 @@
 //     波数越多、本波基础分越高，奖励分越高（见文件末尾 comboBonusOf）
 //   · 特殊块按稀有度与威力分三档奖励：炸弹猫（60 + 15×波及格）< 彩虹猫（40×清除格）
 //     < 双彩虹（50×清除格），见文件末尾 bombBonusOf / rainbowBonusOf
+//   · 从第 10 关起每通过一关，下一关初始步数获得通关奖励（+2/关、封顶 +10），
+//     见文件末尾 movesBonusOf
 
 export const BOARD_SIZE = 8 // 默认棋盘尺寸（引擎函数自身从 grid 读取行列数）
 export const ELEMENT_COUNT = 6
@@ -458,6 +460,24 @@ export function bombBonusOf(cleared) {
 export function rainbowBonusOf(cleared, isSuper = false) {
   const n = Number.isFinite(cleared) && cleared > 0 ? Math.floor(cleared) : 0
   return (isSuper ? SUPER_RAINBOW_BONUS_PER_CELL : RAINBOW_BONUS_PER_CELL) * n
+}
+
+// ---------- 通关奖励步数 ----------
+// 关卡目标分随关数线性上涨（每关 +600），第 10 关起（目标 6200 分）对休闲玩家
+// 构成第一道离墙。为提高可通关性、增强玩家信心：从第 10 关起，每通过一关，
+// 下一关的初始剩余步数在基础步数之上适当追加奖励——
+//   奖励 = MOVES_BONUS_PER_LEVEL ×（关卡 −（起始关 − 1）），封顶 MOVES_BONUS_MAX
+// 即第 10 关 +2、第 11 关 +4 … 第 14 关起封顶 +10；封顶保证「适当」，
+// 后期关卡不会被步数淹没、仍保挑战性。第 9 关及以前不发放（基础 25 步足够）。
+export const MOVES_BONUS_FROM_LEVEL = 10 // 从第 10 关起发放通关奖励步数
+export const MOVES_BONUS_PER_LEVEL = 2 // 每升一关追加的奖励步数
+export const MOVES_BONUS_MAX = 10 // 奖励步数封顶，保持适度
+
+// 进入第 level 关时的通关奖励步数（叠加在基础步数之上，基础值由 useGame 维护）
+export function movesBonusOf(level) {
+  const n = Number.isFinite(level) && level > 0 ? Math.floor(level) : 1
+  if (n < MOVES_BONUS_FROM_LEVEL) return 0
+  return Math.min(MOVES_BONUS_MAX, MOVES_BONUS_PER_LEVEL * (n - (MOVES_BONUS_FROM_LEVEL - 1)))
 }
 
 // ---------- 提示：最高分支优先 ----------
