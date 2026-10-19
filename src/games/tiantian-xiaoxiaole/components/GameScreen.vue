@@ -138,6 +138,11 @@ if (import.meta.env.DEV) {
         <p v-if="game.nextLevelBonus > 0" class="bonus-line">
           通关奖励：下一关起始 {{ game.nextLevelMoves }} 步（含奖励 +{{ game.nextLevelBonus }} 步）
         </p>
+        <!-- 隐藏彩蛋战果（发现过才展示）：正向激励——只报喜不报「颗粒无收」，
+             避免给玩家「找不全」的挫败感 -->
+        <p v-if="game.eggsFound > 0" class="egg-line">
+          彩蛋战果：发现 {{ game.eggsFound }}/{{ game.eggsPlanned }} 枚 · 彩蛋分 +{{ game.eggScore }}
+        </p>
         <div class="btn-row">
           <button class="btn primary" @click="game.nextLevel()">下一关</button>
           <button class="btn ghost" @click="$emit('home')">回主页</button>
@@ -323,6 +328,19 @@ if (import.meta.env.DEV) {
   font-weight: 800;
   font-size: 13.5px;
   border: 1px dashed var(--primary);
+}
+
+/* 隐藏彩蛋战果行：金蛋胶囊，与步数奖励行同构不同色（惊喜专属金色） */
+.egg-line {
+  display: inline-block;
+  margin: 6px 0 2px;
+  padding: 7px 16px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #fff7e6, #ffe9c2);
+  color: #9c6a00;
+  font-weight: 800;
+  font-size: 13.5px;
+  border: 1px dashed #f0a929;
 }
 
 .stars {

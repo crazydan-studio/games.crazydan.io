@@ -72,6 +72,12 @@ export function playSound(name) {
         beep({ freq: 1180, to: 1860, dur: 0.14, type: 'sine', gain: 0.09 })
         beep({ freq: 1560, to: 2340, dur: 0.1, delay: 0.07, type: 'sine', gain: 0.06 })
         break
+      case 'egg':
+        // 隐藏彩蛋开奖：铃铛式双音报喜 + 顶点星光收束（区别于通关/超级彩虹）
+        beep({ freq: 1318, dur: 0.12, type: 'triangle', gain: 0.13 })
+        beep({ freq: 1760, dur: 0.14, delay: 0.09, type: 'triangle', gain: 0.13 })
+        beep({ freq: 2093, to: 2637, dur: 0.16, delay: 0.19, type: 'sine', gain: 0.1 })
+        break
       case 'clear':
         ;[523, 659, 784, 1046].forEach((f, i) =>
           beep({ freq: f, dur: 0.16, delay: i * 0.09, type: 'triangle', gain: 0.12 })

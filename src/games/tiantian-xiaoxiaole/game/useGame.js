@@ -148,6 +148,11 @@ export function createGame(mode) {
       const plan = planEasterEggs(level.value, ROWS, COLS)
       for (const e of plan) eggCells.set(e.r * COLS + e.c, e.value)
       eggsPlanned.value = plan.length
+      // 彩蛋可发现性：藏蛋位置保密，但「本关有蛋」要预告——没有预告玩家
+      // 可能永远不知道彩蛋存在，惊喜就无从谈起（重开本关重埋也重新预告）
+      if (plan.length > 0) {
+        toast(`第 ${level.value} 关藏着 ${plan.length} 枚惊喜彩蛋，消除时说不定就撞上喵～`)
+      }
     } else {
       eggsPlanned.value = 0
     }
@@ -276,7 +281,7 @@ export function createGame(mode) {
   // ---------- 隐藏彩蛋触发 ----------
   // 任何消除路径（普通匹配/连消波次/炸弹波及/彩虹清场）移除的格子里若有彩蛋，
   // 当场开奖：加固定彩蛋分（不乘连消倍数，规则见 engine.js）、飘字报喜、
-  // 记入本关彩蛋战绩。返回本波开出的彩蛋数。
+  // 专属音效庆祝、记入本关彩蛋战绩。返回本波开出的彩蛋数。
   function collectEggs(cells) {
     if (!eggCells.size) return 0
     let hit = 0
@@ -291,6 +296,7 @@ export function createGame(mode) {
       score.value += value
       pushPopup(r, c, `彩蛋 +${value}！`)
     }
+    if (hit > 0) playSound('egg')
     return hit
   }
 
