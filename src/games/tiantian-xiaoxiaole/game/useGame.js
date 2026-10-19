@@ -61,6 +61,10 @@ export function createGame(mode) {
   const target = computed(() => 800 + (level.value - 1) * 600)
   const stars = computed(() => (moves.value >= 12 ? 3 : moves.value >= 6 ? 2 : 1))
   const isClassic = computed(() => modeRef.value === 'classic')
+  // 下一关通关奖励步数与初始步数（结算弹窗展示用；从第 10 关起 bonus > 0）。
+  // 奖励要「看得见」：通关时预告下一关的奖励，增强玩家信心
+  const nextLevelBonus = computed(() => (isClassic.value ? movesBonusOf(level.value + 1) : 0))
+  const nextLevelMoves = computed(() => MOVES_PER_LEVEL + nextLevelBonus.value)
 
   function clearAllTimers() {
     clearTimeout(idleTimer)
@@ -142,9 +146,15 @@ export function createGame(mode) {
   }
 
   function nextLevel() {
+    // 先取本关通关换来的下一关奖励步数（level 自身即将 +1）
+    const bonus = movesBonusOf(level.value + 1)
     level.value += 1
     saveLevel(level.value) // 自动记录：通关推进即写入，刷新后从这一关继续
     resetRound()
+    // 奖励可感知：进入带奖励的关卡时明确提示，让玩家知道闯关有回报
+    if (modeRef.value === 'classic' && bonus > 0) {
+      toast(`通关奖励 +${bonus} 步！第 ${level.value} 关起始 ${movesFor(level.value)} 步喵～`)
+    }
   }
 
   function destroy() {
@@ -602,6 +612,8 @@ export function createGame(mode) {
     popups,
     comboNow,
     isClassic,
+    nextLevelBonus,
+    nextLevelMoves,
     // 动作
     start,
     restart,

@@ -129,6 +129,10 @@ if (import.meta.env.DEV) {
         </div>
         <h3>第 {{ game.level }} 关完成！</h3>
         <p class="mini">分数 {{ game.score }} · 剩余 {{ game.moves }} 步</p>
+        <!-- 通关奖励步数预告（第 10 关起）：让奖励看得见，增强玩家信心 -->
+        <p v-if="game.nextLevelBonus > 0" class="bonus-line">
+          通关奖励：下一关起始 {{ game.nextLevelMoves }} 步（含奖励 +{{ game.nextLevelBonus }} 步）
+        </p>
         <div class="btn-row">
           <button class="btn primary" @click="game.nextLevel()">下一关</button>
           <button class="btn ghost" @click="$emit('home')">回主页</button>
@@ -301,6 +305,19 @@ if (import.meta.env.DEV) {
 
 .result-card p {
   margin: 4px 0;
+}
+
+/* 通关奖励步数预告行：暖色胶囊高亮，与普通 mini 文案区分 */
+.bonus-line {
+  display: inline-block;
+  margin: 8px 0 2px;
+  padding: 7px 16px;
+  border-radius: 99px;
+  background: var(--bg-deep);
+  color: var(--primary-deep);
+  font-weight: 800;
+  font-size: 13.5px;
+  border: 1px dashed var(--primary);
 }
 
 .stars {
